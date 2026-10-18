@@ -6,5 +6,6 @@ to expose all task ids to ``gym.make`` / ``gym.spec``.
 """
 
 from . import simtoolreal  # side effect: gym.register("Isaacsimenvs-SimToolReal-Direct-v0", ...)
+from . import tianji_wuji  # independent single-arm Wuji task
 
-__all__ = ["simtoolreal"]
+__all__ = ["simtoolreal", "tianji_wuji"]

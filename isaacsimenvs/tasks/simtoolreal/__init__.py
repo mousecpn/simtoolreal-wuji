@@ -12,14 +12,25 @@ Entry points:
 
 from __future__ import annotations
 
+from importlib import import_module
 from pathlib import Path
 
 import gymnasium as gym
 
-from .simtoolreal_env import SimToolRealEnv
-from .simtoolreal_env_cfg import SimToolRealEnvCfg
-
 __all__ = ["SimToolRealEnv", "SimToolRealEnvCfg"]
+
+
+def __getattr__(name: str):
+    if name == "SimToolRealEnv":
+        module = import_module(".simtoolreal_env", __name__)
+    elif name == "SimToolRealEnvCfg":
+        module = import_module(".simtoolreal_env_cfg", __name__)
+    else:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    value = getattr(module, name)
+    globals()[name] = value
+    return value
+
 
 _CFG_DIR = Path(__file__).resolve().parents[2] / "cfg"
 

@@ -35,6 +35,8 @@ def main() -> None:
         help="Key in gym.register kwargs for the rl_games YAML (PPO vs SAPG).",
     )
     parser.add_argument("--num_envs", type=int, default=1)
+    parser.add_argument("--num_assets_per_type", type=int, default=None)
+    parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--env_idx", type=int, default=0, help="Which env the camera follows (0..num_envs-1)")
     parser.add_argument("--steps", type=int, default=300, help="Physics steps to record")
     parser.add_argument("--video_fps", type=int, default=30)
@@ -71,6 +73,10 @@ def main() -> None:
     # step/reset semantics needed, and DirectRLEnv exposes .scene / .sim directly.
     env_cfg = load_cfg_from_registry(my_args.task, "env_cfg_entry_point")
     env_cfg.scene.num_envs = my_args.num_envs
+    if my_args.num_assets_per_type is not None:
+        env_cfg.assets.num_assets_per_type = my_args.num_assets_per_type
+    if my_args.seed is not None:
+        env_cfg.seed = my_args.seed
     if my_args.goal_mode is not None and hasattr(env_cfg, "peg_in_hole"):
         env_cfg.peg_in_hole.goal_mode = my_args.goal_mode
 
@@ -105,8 +111,10 @@ def main() -> None:
 
     # Aim the camera using the env cfg's recording pose (env-local frame).
     env_origin = env.scene.env_origins[my_args.env_idx]
-    eye = env_origin + torch.tensor(env_cfg.record_camera_eye, device=env.device)
-    target = env_origin + torch.tensor(env_cfg.record_camera_target, device=env.device)
+    camera_eye = getattr(env_cfg, "record_camera_eye", env_cfg.viewer.eye)
+    camera_target = getattr(env_cfg, "record_camera_target", env_cfg.viewer.lookat)
+    eye = env_origin + torch.tensor(camera_eye, device=env.device)
+    target = env_origin + torch.tensor(camera_target, device=env.device)
     camera.set_world_poses_from_view(eye.unsqueeze(0), target.unsqueeze(0))
 
     # Step the sim once to flush the pose change through PhysX/Hydra so

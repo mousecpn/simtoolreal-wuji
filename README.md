@@ -101,6 +101,10 @@ agent.params.config.expl_coef_block_size=4096
 
 To finetune from a checkpoint, add `--checkpoint pretrained_policy/model.pth --checkpoint_load_mode weights` (`resume` also restores the optimizer state). If you run out of GPU memory, reduce `env.scene.num_envs` and `expl_coef_block_size` together (`num_envs / expl_coef_block_size` is the SAPG block count — keep it at 6).
 
+For the independent **single Tianji arm + Wuji hand** Isaac Sim task, see
+[Tianji/Wuji training](docs/tianji_wuji_training.md). It uses a separate task ID
+and policy configuration; the Kuka/Sharpa task above is unchanged.
+
 ### Isaac Gym (legacy)
 
 The paper's results were trained with the Isaac Gym pipeline. It logs to [Weights & Biases](https://wandb.ai/); run `wandb login` and set `wandb_entity` in `isaacgymenvs/launch_training.py` before launching:

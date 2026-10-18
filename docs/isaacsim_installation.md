@@ -7,6 +7,8 @@ The `isaacsimenvs/` package runs the SimToolReal task in Isaac Sim via Isaac Lab
 - Python 3.11
 - NVIDIA GPU with driver >= 525.60
 - CUDA 12+
+- Ubuntu 22.04 or 24.04 is recommended for the supported Isaac Sim 5.1 RTX
+  configuration.
 - `uv` for package management ([install instructions](https://docs.astral.sh/uv/getting-started/installation/))
 
 ## Install
@@ -73,6 +75,30 @@ Smoke tests (one Kit boot per process, ~1-2 min each; run individually, not via 
 .venv_isaacsim/bin/python isaacsimenvs/tests/test_simtoolreal_env_smoke.py \
   --num_envs 8 --num_assets_per_type 2 --steps 10
 ```
+
+To save a headless smoke-test video for offline inspection:
+
+```bash
+.venv_isaacsim/bin/python isaacsimenvs/tests/test_simtoolreal_env_smoke.py \
+  --num_envs 8 --num_assets_per_type 2 --steps 600 \
+  --video outputs/smoke_test.mp4
+```
+
+Recording automatically enables camera rendering. The MP4 follows environment 0
+with the configured viewer camera; use `--video_env 1` to inspect another
+environment or `--video_width 1280 --video_height 720` for higher resolution.
+The smoke test uses a single-GPU compatibility renderer by default: it disables
+the Fabric Scene Delegate and multi-GPU RTX startup, neither of which this task
+needs. Pass `--no-video_compat` to restore Isaac Lab's default rendering path.
+It also removes the script's `--video <path>` option from Kit's raw command
+line after parsing it. `video` is a Kit-reserved option; forwarding it would
+create an unintended default RTX viewport before the offscreen render product.
+At the default 60 simulation steps per second, 600 steps produce about 10 seconds.
+Actions remain zero, as in the original smoke test; this is not a trained-policy
+rollout. Video encoding requires `imageio[ffmpeg]` from the installation steps.
+If using compatibility libraries, launch from the terminal where their
+`LD_LIBRARY_PATH` is configured. Avoid running another Isaac Sim process on the
+same GPU during recording.
 
 Training:
 
