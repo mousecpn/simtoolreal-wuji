@@ -232,3 +232,15 @@ videos/
 outputs/
 evals_isaacsim/
 evals/
+
+# Per-machine environments, credentials, and runtime state
+.venv*/
+.env.*
+.aws/
+.ssh/
+.codex/
+.agents/
+/logs/
+/DexTele
+# Generated robot conversion outputs (regenerate from DexTele)
+/assets/tianji_wuji/
