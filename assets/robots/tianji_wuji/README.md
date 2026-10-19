@@ -2,8 +2,8 @@
 
 This directory contains the Tianji CCS 696 robot and Wuji hand source assets
 needed by the standalone Tianji + Wuji training environment. Both left and
-right sides are included, even though the training environment currently uses
-one right arm and one right hand. No sibling DexTele or sim_infra checkout,
+right sides are included. The single task uses one right arm and hand; the
+dual task uses both arms and hands. No sibling DexTele or sim_infra checkout,
 external symlink, or asset download is required for these robot assets.
 
 The package preserves the DexTele root layout expected by the environment:

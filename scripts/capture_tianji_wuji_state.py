@@ -12,6 +12,8 @@ from isaaclab.app import AppLauncher
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--steps", type=int, default=45)
+    parser.add_argument("--arms", choices=("single", "dual"), default="single",
+                        help="Single right arm/hand (default), or both Tianji arms and Wuji hands")
     parser.add_argument("--out", type=Path, default=Path("outputs/tianji_wuji_snapshot/state.json"))
     parser.add_argument("--trajectory", action="store_true", help="Save a sampled rollout instead of a single state")
     parser.add_argument("--frame-stride", type=int, default=2)
@@ -27,14 +29,19 @@ def main():
         import gymnasium as gym
         import torch
         import isaacsimenvs
-        from isaacsimenvs.tasks.tianji_wuji.config import TianjiWujiEnvCfg
-
-        cfg = TianjiWujiEnvCfg()
+        if args.arms == "dual":
+            from isaacsimenvs.tasks.tianji_wuji_dual.config import TianjiWujiDualEnvCfg
+            cfg = TianjiWujiDualEnvCfg()
+            task = "Isaacsimenvs-SimToolReal-TianjiWujiDual-Direct-v0"
+        else:
+            from isaacsimenvs.tasks.tianji_wuji.config import TianjiWujiEnvCfg
+            cfg = TianjiWujiEnvCfg()
+            task = "Isaacsimenvs-SimToolReal-TianjiWuji-Direct-v0"
         cfg.seed = 42
         cfg.scene.num_envs = 1
         cfg.assets.handle_head_types = ("hammer",)
         cfg.assets.num_assets_per_type = 1
-        env = gym.make("Isaacsimenvs-SimToolReal-TianjiWuji-Direct-v0", cfg=cfg)
+        env = gym.make(task, cfg=cfg)
         inner = env.unwrapped
         obs, _ = env.reset()
         origin = inner.scene.env_origins[0]
@@ -57,11 +64,13 @@ def main():
         frames = [frame(0)] if args.trajectory else []
         # A small random arm command and slowly varying random finger targets.
         # The scene is a physical rollout, not a posed model or trained policy.
-        action = torch.zeros(1, 27, device=inner.device)
+        action = torch.zeros(1, cfg.action_space, device=inner.device)
         for step in range(args.steps):
             if step % 15 == 0:
                 action = torch.rand_like(action) * 2 - 1
                 action[:, :7] *= .6 if args.trajectory else .25
+                if args.arms == "dual":
+                    action[:, 27:34] *= .6 if args.trajectory else .25
             obs, reward, _, _, _ = env.step(action)
             assert torch.isfinite(obs["policy"]).all()
             if args.trajectory and (step + 1) % args.frame_stride == 0:
@@ -69,6 +78,9 @@ def main():
 
         index = int(inner._object_asset_index_per_env[0])
         snapshot = {
+            "arms": args.arms,
+            "task": task,
+            "action_dim": cfg.action_space,
             "step": args.steps,
             "robot_urdf": inner._robot_urdf_path,
             "robot_root_pose": pose(inner.robot),

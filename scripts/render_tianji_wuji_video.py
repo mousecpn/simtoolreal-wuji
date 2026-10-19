@@ -48,6 +48,22 @@ class MeshModel:
             parts.append(vertices @ transform[:3, :3].T + transform[:3, 3])
         return np.concatenate(parts)
 
+    def framing_vertices(self, pose, joints=None, hands_only=False):
+        """Sample original mesh vertices for one fixed camera covering the rollout."""
+        if joints:
+            self.model.update_cfg(joints)
+        root = pose_matrix(pose)
+        parts = []
+        for node, vertices in self.parts:
+            if hands_only and not any(word in str(node).lower() for word in ("finger", "palm", "wuji")):
+                continue
+            transform = root @ self.model.scene.graph[node][0]
+            sample = vertices[::max(1, len(vertices) // 250)]
+            parts.append(sample @ transform[:3, :3].T + transform[:3, 3])
+        if not parts:
+            return self.framing_vertices(pose, joints)
+        return np.concatenate(parts)
+
 
 @njit(cache=True)
 def rasterize(vertices, faces, colors, image, depth, camera, center, scale):
@@ -101,6 +117,28 @@ def draw_label(image, text, xy, size=.6, color=(30, 50, 70)):
     cv2.putText(image, text, xy, cv2.FONT_HERSHEY_SIMPLEX, size, color, 1, cv2.LINE_AA)
 
 
+def dual_camera_frames(models, frames, camera, panel_widths, panel_height):
+    """Fit both arms/hands over all recorded states; keep the camera stationary."""
+    bounds = [[], []]
+    for frame in frames:
+        for name, model in models.items():
+            joints = frame.get("joint_positions") if name == "robot" else None
+            vertices = model.framing_vertices(frame[f"{name}_root_pose"], joints)
+            bounds[0].append(vertices @ camera.T)
+            if name != "table":
+                vertices = model.framing_vertices(frame[f"{name}_root_pose"], joints, hands_only=name == "robot")
+                bounds[1].append(vertices @ camera.T)
+    result = []
+    for points, width in zip(bounds, panel_widths):
+        points = np.concatenate(points)
+        lower, upper = points.min(axis=0), points.max(axis=0)
+        center = camera.T @ ((lower + upper) / 2)
+        extent = np.maximum(upper - lower, .01)
+        scale = .88 * min(width / extent[0], panel_height / extent[1])
+        result.append((center, scale))
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--trajectory", type=Path, required=True)
@@ -110,6 +148,9 @@ def main():
     args = parser.parse_args()
     data = json.loads(args.trajectory.read_text())
     frames = data["frames"][:args.max_frames]
+    if not frames:
+        parser.error("trajectory has no frames")
+    dual = data.get("arms", "single") == "dual"
     fps = data.get("fps", 30)
     models = {name: MeshModel(data[f"{name}_urdf"]) for name in ("robot", "table", "object")}
     faces, colors, offset = [], [], 0
@@ -124,6 +165,9 @@ def main():
     left_width = int(width * .53)
     panel_height = height - 150
     camera = camera_basis()
+    framing = (dual_camera_frames(models, frames, camera, (left_width, width - left_width), panel_height)
+               if dual else [(np.array([-.16, .07, .79]), panel_height / 1.18),
+                             (np.array([-.015, .075, .63]), panel_height / .66)])
     args.out.parent.mkdir(parents=True, exist_ok=True)
     writer = imageio_ffmpeg.write_frames(
         str(args.out), (width, height), fps=fps, codec="libx264",
@@ -140,17 +184,17 @@ def main():
             ])
             image = np.full((height, width, 3), (243, 245, 247), dtype=np.uint8)
             panels = [
-                (image[105:105 + panel_height, :left_width], np.array([-.16, .07, .79]), panel_height / 1.18),
-                (image[105:105 + panel_height, left_width:], np.array([-.015, .075, .63]), panel_height / .66),
+                (image[105:105 + panel_height, :left_width], *framing[0]),
+                (image[105:105 + panel_height, left_width:], *framing[1]),
             ]
             for panel, center, scale in panels:
                 depth = np.full(panel.shape[:2], -np.inf)
                 rasterize(vertices, faces, colors, panel, depth, camera, center, scale)
-            draw_label(image, "Tianji arm + Wuji hand | SimToolReal", (28, 34), .85)
+            draw_label(image, "Tianji arms + Wuji hands | SimToolReal" if dual else "Tianji arm + Wuji hand | SimToolReal", (28, 34), .85)
             elapsed = frame["step"] * data.get("step_dt", 1 / 60)
             draw_label(image, f"Random actions | actual simulated poses | {elapsed:.2f} s", (28, 65), .57, (85, 101, 118))
-            draw_label(image, "Single arm + single hand", (28, 96), .58)
-            draw_label(image, "Hand + task object", (left_width + 20, 96), .58)
+            draw_label(image, "Dual arms + dual hands" if dual else "Single arm + single hand", (28, 96), .58)
+            draw_label(image, "Both hands + task object" if dual else "Hand + task object", (left_width + 20, 96), .58)
             draw_label(image, "CPU rendering of original URDF meshes | Untrained policy", (28, height - 18), .5, (85, 101, 118))
             writer.send(image)
             if index in preview_indices:

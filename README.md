@@ -101,11 +101,14 @@ agent.params.config.expl_coef_block_size=4096
 
 To finetune from a checkpoint, add `--checkpoint pretrained_policy/model.pth --checkpoint_load_mode weights` (`resume` also restores the optimizer state). If you run out of GPU memory, reduce `env.scene.num_envs` and `expl_coef_block_size` together (`num_envs / expl_coef_block_size` is the SAPG block count — keep it at 6).
 
-For the independent **single Tianji arm + Wuji hand** Isaac Sim task, see
+For the independent **single or dual Tianji arm + Wuji hand** Isaac Sim tasks, see
 [Tianji/Wuji training](docs/tianji_wuji_training.md). Robot source assets are bundled in
 [`assets/robots/tianji_wuji`](assets/robots/tianji_wuji), including both arms/hands; no external
-DexTele or sim_infra checkout is needed for these robot assets. It uses a separate task ID
-and policy configuration; the Kuka/Sharpa task above is unchanged.
+DexTele or sim_infra checkout is needed for these robot assets. Each task uses a separate ID
+and policy configuration; the Kuka/Sharpa task above is unchanged. Select
+`--task Isaacsimenvs-SimToolReal-TianjiWuji-Direct-v0` for the original single
+arm/hand settings, or `--task Isaacsimenvs-SimToolReal-TianjiWujiDual-Direct-v0`
+for both arms/hands (54 actions).
 
 ### Isaac Gym (legacy)
 

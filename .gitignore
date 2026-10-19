@@ -244,3 +244,6 @@ evals/
 /DexTele
 # Generated robot conversion outputs (regenerate from DexTele)
 /assets/tianji_wuji/
+
+# Generated dual-arm robot conversion outputs
+/assets/tianji_wuji_dual/

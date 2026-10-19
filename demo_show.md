@@ -163,3 +163,19 @@ FFmpeg 可能把 1920 x 1080 自动调整到 1920 x 1088，这是编码对齐提
 - 相机初始化姿态诊断曾显示全零；非黑帧不等于取景正确，仍需人工播放检查。
 
 本指南命令沿用此前 RTX 工作节点上通过的 smoke test 和视频流程；工作站版尚未在你的另一台机器上实测。
+
+## Tianji + Wuji 单手 / 双手随机视频
+
+Tianji/Wuji 使用独立脚本，不使用上述 Kuka/Sharpa 预训练 checkpoint。`--arms single` 保留原单臂单手设置，`--arms dual` 选择双臂双手。以下命令记录真实物理 rollout，再在 CPU 上渲染原始 meshes：
+
+```bash
+source .envrc
+.venv_isaacsim/bin/python scripts/capture_tianji_wuji_state.py \
+  --arms dual --headless --steps 600 --trajectory --frame-stride 2 \
+  --out outputs/tianji_wuji_dual_video/trajectory.json
+.venv_isaacsim/bin/python scripts/render_tianji_wuji_video.py \
+  --trajectory outputs/tianji_wuji_dual_video/trajectory.json \
+  --out outputs/tianji_wuji_dual_video/random_rollout.mp4
+```
+
+视频及首、中、末帧预览写入该输出目录。它展示随机动作下的仿真状态，并非训练策略效果。训练时使用 `--task Isaacsimenvs-SimToolReal-TianjiWujiDual-Direct-v0` 选择双手，使用 `--task Isaacsimenvs-SimToolReal-TianjiWuji-Direct-v0` 选择单手。完整说明见 [Tianji/Wuji 训练指南](docs/tianji_wuji_training.md)。

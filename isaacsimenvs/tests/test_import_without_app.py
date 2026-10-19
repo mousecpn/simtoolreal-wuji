@@ -27,6 +27,14 @@ assert spec.entry_point == "isaacsimenvs.tasks.simtoolreal.simtoolreal_env:SimTo
 assert spec.kwargs["env_cfg_entry_point"] == "isaacsimenvs.tasks.simtoolreal.simtoolreal_env_cfg:SimToolRealEnvCfg"
 assert "isaacsimenvs.tasks.simtoolreal.simtoolreal_env" not in sys.modules
 assert "isaacsimenvs.tasks.simtoolreal.simtoolreal_env_cfg" not in sys.modules
+for task, package, cls in (
+    ("TianjiWuji", "tianji_wuji", "TianjiWujiEnv"),
+    ("TianjiWujiDual", "tianji_wuji_dual", "TianjiWujiDualEnv"),
+):
+    registered = gym.spec(f"Isaacsimenvs-SimToolReal-{task}-Direct-v0")
+    assert registered.entry_point == f"isaacsimenvs.tasks.{package}.env:{cls}"
+    assert f"isaacsimenvs.tasks.{package}.env" not in sys.modules
+    assert f"isaacsimenvs.tasks.{package}.config" not in sys.modules
 assert "isaaclab.envs" not in sys.modules
 """,
             ],

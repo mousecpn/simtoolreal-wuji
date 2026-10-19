@@ -1,8 +1,22 @@
-# Tianji 单臂 + Wuji 单手训练
+# Tianji + Wuji 单手 / 双手训练
 
 新环境使用 DexTele 的**右 Tianji 臂 + 右 Wuji 手**，固定躯干底座，共 7 个臂关节和 20 个手关节。任务仍是 SimToolReal 的工具抓取、抬升和目标位姿跟踪，沿用物体生成、奖励和 domain randomization；机器人资产、动作、观测、reset 和训练配置位于独立的 `isaacsimenvs/tasks/tianji_wuji/` 路径。
 
 Gym ID 为 `Isaacsimenvs-SimToolReal-TianjiWuji-Direct-v0`。原有 `Isaacsimenvs-SimToolReal-Direct-v0` 继续使用 Kuka + Sharpa 配置。
+
+双臂双手使用独立的 Gym ID `Isaacsimenvs-SimToolReal-TianjiWujiDual-Direct-v0` 和 `isaacsimenvs/tasks/tianji_wuji_dual/` 配置；通过训练参数 `--task` 选择。单手 ID、默认设置和动作顺序保持原样。双手版本固定同一躯干，保留 Tianji 左右两条运动链，各连接对应 Wuji 手，操作同一个任务物体。
+
+```bash
+# 单臂单手（原设置）
+.venv_isaacsim/bin/python isaacsimenvs/train.py \
+  --task Isaacsimenvs-SimToolReal-TianjiWuji-Direct-v0 --headless
+
+# 双臂双手
+.venv_isaacsim/bin/python isaacsimenvs/train.py \
+  --task Isaacsimenvs-SimToolReal-TianjiWujiDual-Direct-v0 --headless
+```
+
+双手策略为 54 维动作：先左臂 7 + 左手 20，再右臂 7 + 右手 20，各侧采用相同的臂增量和手关节位置控制语义。双手 actor/critic 观测分别为 249/282 维，包含双掌和十个指尖。双手使用独立的 `TianjiWujiDualPPO.yaml` / `TianjiWujiDualSAPG.yaml` 及实验名称。双手策略需要独立训练，不能直接加载单手 checkpoint。
 
 ## 运行依赖与资产
 
@@ -12,11 +26,11 @@ Gym ID 为 `Isaacsimenvs-SimToolReal-TianjiWuji-Direct-v0`。原有 `Isaacsimenv
 source .envrc
 ```
 
-机器人源资产已随 Git 收录在 `assets/robots/tianji_wuji/`，默认从该目录加载，**不需要同级 DexTele、sim_infra 或外部软链接**。包含 Tianji 双臂 meshes、原生 URDF、DexTele 的 Tianji/Wuji MJCF 场景，以及 Wuji 左右手的原生 MJCF、URDF 和 meshes；训练仍只使用右臂和右手。完整来源、范围和逐文件 SHA-256 见该目录的 `README.md` 与 `MANIFEST.json`。
+机器人源资产已随 Git 收录在 `assets/robots/tianji_wuji/`，默认从该目录加载，**不需要同级 DexTele、sim_infra 或外部软链接**。包含 Tianji 双臂 meshes、原生 URDF、DexTele 的 Tianji/Wuji MJCF 场景，以及 Wuji 左右手的原生 MJCF、URDF 和 meshes；单手任务使用右侧，双手任务使用左右两侧。完整来源、范围和逐文件 SHA-256 见该目录的 `README.md` 与 `MANIFEST.json`。
 
-环境启动时从仓库内的 canonical MJCF 生成单右臂单右手 URDF，并复制 meshes 到本次运行的临时资产目录，再转换为 USD。生成缓存不纳入 Git；Isaac Sim / Isaac Lab 和 Python 依赖仍需单独安装。
+环境启动时从仓库内的 canonical MJCF 按所选任务生成单侧或双侧 URDF，并复制 meshes 到本次运行的临时资产目录，再转换为 USD。生成缓存不纳入 Git；Isaac Sim / Isaac Lab 和 Python 依赖仍需单独安装。
 
-如需开发时使用外部版本，可显式设置 `DEXTELE_ROOT=/absolute/path/to/DexTele`，或在训练命令中设置 `env.robot.dextele_root=/absolute/path/to/DexTele`。该外部 checkout 必须同时提供 MJCF、meshes 和原生 Wuji `urdf/right.urdf`；取消覆盖后恢复使用仓库内资产。
+如需开发时使用外部版本，可显式设置 `DEXTELE_ROOT=/absolute/path/to/DexTele`，或在训练命令中设置 `env.robot.dextele_root=/absolute/path/to/DexTele`。该外部 checkout 必须同时提供 MJCF、meshes 和对应侧原生 Wuji URDF（双手需要 `urdf/left.urdf` 与 `urdf/right.urdf`）；取消覆盖后恢复使用仓库内资产。
 
 可先独立检查资产转换，无需启动 Isaac Sim：
 
@@ -100,3 +114,29 @@ source .envrc
 - 原 Kuka + Sharpa 环境通过 2 环境、10 步 smoke 回归，仍使用 29 维动作与 140/162 维观测。其环境实现、训练入口、PPO/SAPG 配置均未修改。
 
 这些验证证明训练链路可以运行；尚未进行长期训练或评估抓取成功率。机器人 PD 增益、初始姿态和任务分布可通过 `env.robot` 等配置继续调节。
+
+## 随机 rollout 与视频
+
+录制脚本通过 `--arms single|dual` 选择机器人，默认 `single`。以下先在 Isaac Sim 中运行双臂双手随机动作并记录实际物理状态，再用原始 URDF meshes 在 CPU 上渲染视频；无需训练好的策略，也不依赖 RTX 相机渲染。
+
+```bash
+source .envrc
+.venv_isaacsim/bin/python scripts/capture_tianji_wuji_state.py \
+  --arms dual --headless --steps 600 --trajectory --frame-stride 2 \
+  --out outputs/tianji_wuji_dual_video/trajectory.json
+.venv_isaacsim/bin/python scripts/render_tianji_wuji_video.py \
+  --trajectory outputs/tianji_wuji_dual_video/trajectory.json \
+  --out outputs/tianji_wuji_dual_video/random_rollout.mp4
+```
+
+双手视频根据完整轨迹固定取景，分别展示整机和双手工作区域。画面是实际仿真状态的 mesh 渲染，随机动作不代表策略已学会抓取。换成 `--arms single` 并使用独立输出目录，即可录制原单臂单手环境。轨迹、资产副本、MP4 和预览图保存在 `outputs/`，不纳入 Git。
+
+双手物理验证命令：
+
+```bash
+source .envrc
+.venv_isaacsim/bin/python -u isaacsimenvs/tests/test_tianji_wuji_dual_env_smoke.py \
+  --headless --num_envs 2 --steps 120
+```
+
+双手已通过两侧臂/手实际运动、120 步随机动作、局部 reset、超时和目标重采样检查；8 个环境的 PPO 完成 2 个 epoch 并保存 checkpoint。这些运行验证不代表已学会双手抓取。

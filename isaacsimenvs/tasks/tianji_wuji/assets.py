@@ -21,6 +21,16 @@ DOF_NAMES = ARM_JOINT_NAMES + HAND_JOINT_NAMES
 DEFAULT_ARM_POSE = (-0.712, -0.963, 0.0, -0.85, -0.356, 0.0, 0.0)
 PALM_LINK = "right_wuji_palm"
 FINGERTIP_LINKS = tuple(f"right_finger{i}_tip_link" for i in range(1, 6))
+LEFT_ARM_JOINT_NAMES = tuple(f"Joint{i}_L" for i in range(1, 8))
+LEFT_HAND_JOINT_NAMES = tuple(f"left_finger{i}_joint{j}" for i in range(1, 6) for j in range(1, 5))
+LEFT_DOF_NAMES = LEFT_ARM_JOINT_NAMES + LEFT_HAND_JOINT_NAMES
+DUAL_DOF_NAMES = LEFT_DOF_NAMES + DOF_NAMES
+LEFT_DEFAULT_ARM_POSE = (0.712, -0.963, 0.0, -0.85, 0.356, 0.0, 0.0)
+DUAL_DEFAULT_ARM_POSE = LEFT_DEFAULT_ARM_POSE + DEFAULT_ARM_POSE
+LEFT_PALM_LINK = "left_wuji_palm"
+DUAL_PALM_LINKS = (LEFT_PALM_LINK, PALM_LINK)
+LEFT_FINGERTIP_LINKS = tuple(f"left_finger{i}_tip_link" for i in range(1, 6))
+DUAL_FINGERTIP_LINKS = LEFT_FINGERTIP_LINKS + FINGERTIP_LINKS
 SOURCE_RELATIVE = Path("robots/tianji/tianji_marvin_CCS_real_limit_wuji_sim_infra.xml")
 REPO_ROOT = Path(__file__).resolve().parents[3]
 BUNDLED_ASSET_ROOT = REPO_ROOT / "assets/robots/tianji_wuji"
@@ -74,8 +84,8 @@ def find_source(dextele_root=None):
     return source
 
 
-def prepare_asset(dextele_root=None, output_dir=None):
-    """Generate a single right arm + right hand URDF, returning its path.
+def prepare_asset(dextele_root=None, output_dir=None, arms="single"):
+    """Generate a right arm/hand (default) or both arms/hands, returning its path.
 
     Joint frames, mesh scales, principal inertia frames, efforts, and limits are
     copied from the canonical MJCF.  The palm inertia comes from Wuji's native
@@ -83,8 +93,12 @@ def prepare_asset(dextele_root=None, output_dir=None):
     source collision-enabled mesh set is retained. Pairwise MJCF exclusions are
     recorded in the manifest for the Isaac Sim scene's USD collision filters.
     """
+    if arms not in {"single", "dual"}:
+        raise ValueError(f"arms must be 'single' or 'dual', got {arms!r}")
+    dual = arms == "dual"
+    expected_dofs = DUAL_DOF_NAMES if dual else DOF_NAMES
     source = find_source(dextele_root)
-    target = Path(output_dir or REPO_ROOT / "assets/tianji_wuji").expanduser().resolve()
+    target = Path(output_dir or REPO_ROOT / ("assets/tianji_wuji_dual" if dual else "assets/tianji_wuji")).expanduser().resolve()
     target.mkdir(parents=True, exist_ok=True)
     mesh_target = target / "meshes"
     mesh_target.mkdir(exist_ok=True)
@@ -93,7 +107,7 @@ def prepare_asset(dextele_root=None, output_dir=None):
     meshes = {m.get("name"): m for m in mj.findall("asset/mesh")}
     materials = {m.get("name"): m.get("rgba", "0.8 0.8 0.8 1") for m in mj.findall("asset/material")}
     defaults = {d.get("class"): d.find("joint").attrib for d in mj.findall("default/default") if d.find("joint") is not None}
-    urdf = ET.Element("robot", name="tianji_wuji_right")
+    urdf = ET.Element("robot", name="tianji_wuji_dual" if dual else "tianji_wuji_right")
     base = mj.find("worldbody/body[@name='base']")
     if base is None or base.find("body[@name='Link1_R']") is None:
         raise ValueError(f"Expected canonical base/Link1_R hierarchy in {source}")
@@ -124,11 +138,15 @@ def prepare_asset(dextele_root=None, output_dir=None):
             ET.SubElement(output, "mass", value=inertia.get("mass"))
             diagonal = _numbers(inertia.get("diaginertia"), ())
             ET.SubElement(output, "inertia", ixx=str(diagonal[0]), iyy=str(diagonal[1]), izz=str(diagonal[2]), ixy="0", ixz="0", iyz="0")
-        elif name == PALM_LINK:
+        elif name in (DUAL_PALM_LINKS if dual else (PALM_LINK,)):
             # Native hand palm inertia, expressed in its mesh/body frame.
-            if not native.is_file():
-                raise FileNotFoundError(f"Missing native Wuji palm inertia source: {native}")
-            palm_inertia = ET.parse(native).find("link[@name='right_palm_link']/inertial")
+            side = name.split("_", 1)[0]
+            palm_native = source.parent / f"wuji_hand_sim_infra/urdf/{side}.urdf"
+            if not palm_native.is_file():
+                raise FileNotFoundError(f"Missing native Wuji palm inertia source: {palm_native}")
+            palm_inertia = ET.parse(palm_native).find(f"link[@name='{side}_palm_link']/inertial")
+            if palm_inertia is None:
+                raise ValueError(f"Missing {side} palm inertia in {palm_native}")
             link.append(palm_inertia)
         if parent_name:
             joint = body.find("joint")
@@ -142,7 +160,7 @@ def prepare_asset(dextele_root=None, output_dir=None):
                 ET.SubElement(output, "axis", xyz=joint.get("axis", "0 0 1"))
                 low, high = _numbers(joint.get("range"), ())
                 force = _numbers(joint.get("actuatorfrcrange"), (-1., 1.))
-                velocity = 3.14 if joint.get("name") in ARM_JOINT_NAMES else 8.58
+                velocity = 3.14 if joint.get("name") in ARM_JOINT_NAMES + LEFT_ARM_JOINT_NAMES else 8.58
                 ET.SubElement(output, "limit", lower=str(low), upper=str(high), effort=str(max(abs(v) for v in force)), velocity=str(velocity))
                 attrs = dict(defaults.get(joint.get("class", inherited_class), {}))
                 attrs.update(joint.attrib)
@@ -151,7 +169,7 @@ def prepare_asset(dextele_root=None, output_dir=None):
         # A single visual per geometry, plus only the collision-enabled copy.
         seen_visuals = set()
         for geom in body.findall("geom"):
-            if geom.get("mesh") == "Base_L":
+            if not dual and geom.get("mesh") == "Base_L":
                 continue
             if geom.get("mesh", "").endswith("_tip_link"):
                 continue  # Attached to a dedicated fixed tip body below.
@@ -171,14 +189,20 @@ def prepare_asset(dextele_root=None, output_dir=None):
                 _origin(collision, geom)
                 mesh_geometry(collision, geom)
         for child in body.findall("body"):
-            if child.get("name") == "Link1_L":
+            if not dual and child.get("name") == "Link1_L":
                 continue
             visit(child, name, body.get("childclass", inherited_class))
         # Preserve tip frames as real fixed URDF links for contact observations.
-        if name.startswith("right_finger") and name.endswith("_link4"):
+        if name.startswith(("left_finger", "right_finger") if dual else "right_finger") and name.endswith("_link4"):
             tip = name.replace("_link4", "_tip_link")
             tip_geom = next(g for g in body.findall("geom") if g.get("mesh") == tip)
             tip_link = ET.SubElement(urdf, "link", name=tip)
+            if dual:
+                collision_masks[tip] = [
+                    (int(g.get("contype", "1")), int(g.get("conaffinity", "1")))
+                    for g in body.findall("geom") if g.get("mesh") == tip
+                    and (int(g.get("contype", "1")) or int(g.get("conaffinity", "1")))
+                ]
             # Negligible explicit inertia keeps this contact body loadable with
             # fixed-joint collapsing disabled; tip mass is in source link4.
             inertial = ET.SubElement(tip_link, "inertial")
@@ -193,13 +217,24 @@ def prepare_asset(dextele_root=None, output_dir=None):
             _origin(fixed, tip_geom)
 
     visit(base)
-    if tuple(j["name"] for j in joints) != DOF_NAMES:
+    if tuple(j["name"] for j in joints) != expected_dofs:
         raise ValueError(f"Unexpected joint ordering: {[j['name'] for j in joints]}")
     ET.indent(urdf)
-    path = target / "tianji_wuji_right.urdf"
+    path = target / ("tianji_wuji_dual.urdf" if dual else "tianji_wuji_right.urdf")
     ET.ElementTree(urdf).write(path, encoding="utf-8", xml_declaration=True)
     names = {link.get("name") for link in urdf.findall("link")}
     exclusions = [(c.get("body1"), c.get("body2")) for c in mj.findall("contact/exclude") if c.get("body1") in names and c.get("body2") in names]
+    if dual:
+        # A promoted contact tip belonged to link4 in MJCF, so it must inherit
+        # that body's explicit pair exclusions after becoming a separate body.
+        tips_by_parent = {tip.replace("_tip_link", "_link4"): tip for tip in DUAL_FINGERTIP_LINKS}
+        inherited = []
+        for first, second in exclusions:
+            for a in (first, tips_by_parent.get(first)):
+                for b in (second, tips_by_parent.get(second)):
+                    if a and b and (a, b) not in exclusions and (a, b) not in inherited:
+                        inherited.append((a, b))
+        exclusions.extend(inherited)
     # URDF cannot express MuJoCo collision bit masks. Convert incompatible
     # robot body masks to pair exclusions consumed by the USD scene builder.
     masked_bodies = list(collision_masks)
@@ -229,6 +264,19 @@ def prepare_asset(dextele_root=None, output_dir=None):
         "velocity_limits": "Conservative configured caps: arm 3.14 rad/s, hand 8.58 rad/s; canonical MJCF does not specify velocity limits.",
         "world_mount": "Environment-controlled; canonical MJCF base z=0.87 deliberately omitted.",
     }
+    if dual:
+        native_left = source.parent / "wuji_hand_sim_infra/urdf/left.urdf"
+        manifest.update({
+            "arms": "dual", "palm_links": DUAL_PALM_LINKS,
+            "fingertip_links": DUAL_FINGERTIP_LINKS,
+            "default_arm_pose": DUAL_DEFAULT_ARM_POSE,
+            "palm_inertia_sources": {"left": str(native_left.resolve()), "right": str(native.resolve())},
+            "palm_inertia_sources_sha256": {"left": hashlib.sha256(native_left.read_bytes()).hexdigest(), "right": hashlib.sha256(native.read_bytes()).hexdigest()},
+        })
+        manifest["attribution"].update({
+            "robot_model": "Tianji Marvin CCS-696 dual arm and Wuji left/right hands, canonical sim_infra model distributed through DexTele",
+            "derivation": "Both chains retained from canonical MJCF; native left/right Wuji URDFs supply each palm inertia; contact tips promoted to fixed bodies with 1e-6 kg inertia placeholders.",
+        })
     (target / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     return path
 
@@ -242,7 +290,9 @@ def forward_kinematics(urdf_path, positions=None):
     Useful for placing task objects near the hand without hardcoded world
     offsets. Values are homogeneous 4-by-4 matrices, keyed by URDF link name.
     """
-    positions = dict(zip(ARM_JOINT_NAMES, DEFAULT_ARM_POSE)) if positions is None else positions
+    positions = ({**dict(zip(ARM_JOINT_NAMES, DEFAULT_ARM_POSE)),
+                  **dict(zip(LEFT_ARM_JOINT_NAMES, LEFT_DEFAULT_ARM_POSE))}
+                 if positions is None else positions)
     robot = ET.parse(urdf_path).getroot()
     identity = tuple(tuple(float(i == j) for j in range(4)) for i in range(4))
     multiply = lambda a, b: tuple(tuple(sum(a[i][k]*b[k][j] for k in range(4)) for j in range(4)) for i in range(4))
@@ -283,5 +333,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dextele-root")
     parser.add_argument("--output-dir")
+    parser.add_argument("--arms", choices=("single", "dual"), default="single")
     args = parser.parse_args()
-    print(prepare_asset(args.dextele_root, args.output_dir))
+    print(prepare_asset(args.dextele_root, args.output_dir, arms=args.arms))
