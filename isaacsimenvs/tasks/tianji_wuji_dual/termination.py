@@ -51,8 +51,8 @@ def compute_terminations(env) -> tuple[torch.Tensor, torch.Tensor]:
         env.episode_length_buf[goal_reset_ids] = 0
 
     # Termination causes.
-    object_z_local = env.object.data.root_pos_w[:, 2] - env_origins[:, 2]
-    fall = object_z_local < 0.1
+    object_z_local = torch.stack([obj.data.root_pos_w[:, 2] - env_origins[:, 2] for obj in env.objects], dim=1)
+    fall = (object_z_local < 0.1).any(dim=-1)
 
     if term_cfg.max_consecutive_successes > 0:
         max_successes_reached = env._successes >= term_cfg.max_consecutive_successes

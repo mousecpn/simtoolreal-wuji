@@ -18,6 +18,7 @@ from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.assets import Articulation, ArticulationCfg, RigidObject
 from isaaclab.sim.converters import UrdfConverter, UrdfConverterCfg
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, UsdFileCfg, spawn_ground_plane
+from isaaclab.sim.utils import find_matching_prim_paths, get_current_stage
 
 from ..simtoolreal.utils.scene_utils import (
     _bake_usd, _build_object_scale_tensor, _convert_urdf_to_usd,
@@ -212,8 +213,8 @@ def setup_scene(env) -> None:
         ),
         apply_physx_articulation=True,
     )
-    # Table USD(s). When table_scale_range_x/y are non-trivial and
-    # table_scale_num_variants > 1, pre-bake N scaled URDF variants and pass
+    # Table USD(s). Bake non-trivial scales even for a single fixed variant.
+    # With several variants, pass
     # them as a list to RigidObject — Isaac Lab's MultiUsdFileCfg cycles
     # through the list, giving each env one of the variants. Z scale is held
     # at 1.0 so the table surface height matches the policy's expectation.
@@ -222,8 +223,11 @@ def setup_scene(env) -> None:
     n_table_variants = int(getattr(assets_cfg, "table_scale_num_variants", 1))
     table_scale_is_trivial = (
         scale_range_x == (1.0, 1.0) and scale_range_y == (1.0, 1.0)
-    ) or n_table_variants <= 1
+    )
+    if n_table_variants < 1:
+        raise ValueError("table_scale_num_variants must be at least 1")
     if table_scale_is_trivial:
+        env._table_urdf_paths = [str(assets_cfg.table_urdf)]
         table_usd_paths = [_bake_usd(
             _convert_urdf_to_usd(assets_cfg.table_urdf, usd_work_dir, fix_base=False),
             bake_root, "table",
@@ -247,6 +251,7 @@ def setup_scene(env) -> None:
             seed=0,
         )
         env._table_variant_scales = list(variant_scales)
+        env._table_urdf_paths = list(variant_urdf_paths)
         table_usd_paths = [
             _bake_usd(
                 _convert_urdf_to_usd(p, usd_work_dir, fix_base=False),
@@ -275,7 +280,27 @@ def setup_scene(env) -> None:
     env.table = RigidObject(build_rigid_object_cfg("/World/envs/env_.*/Table", table_usd_paths))
     env.object = RigidObject(build_rigid_object_cfg("/World/envs/env_.*/Object", object_usd_paths))
     env.goal_viz = RigidObject(build_rigid_object_cfg("/World/envs/env_.*/GoalViz", goalviz_usd_paths))
-    _log_scene_step(setup_t0, "spawned robot/table/object/goalviz")
+    # Rotate the round-robin asset list, retaining the original pool indices
+    # for observations and replay renderers. A one-asset pool reuses its shape.
+    object2_indices = list(range(1, len(object_usd_paths))) + [0]
+    env.object2 = RigidObject(build_rigid_object_cfg(
+        "/World/envs/env_.*/Object2", [object_usd_paths[i] for i in object2_indices],
+    ))
+    env.goal_viz2 = RigidObject(build_rigid_object_cfg(
+        "/World/envs/env_.*/GoalViz2", [goalviz_usd_paths[i] for i in object2_indices],
+    ))
+    env.objects = (env.object, env.object2)
+    env.goals = (env.goal_viz, env.goal_viz2)
+    table_paths = find_matching_prim_paths("/World/envs/env_.*/Table")
+    if len(table_paths) != env.num_envs:
+        raise RuntimeError(f"Expected {env.num_envs} Table prims, got {len(table_paths)}")
+    env._table_asset_index_per_env = torch.empty(
+        env.num_envs, device=env.device, dtype=torch.long,
+    )
+    for source_idx, path in enumerate(table_paths):
+        env_id = int(path.rsplit("/", 2)[-2].removeprefix("env_"))
+        env._table_asset_index_per_env[env_id] = source_idx % len(table_usd_paths)
+    _log_scene_step(setup_t0, "spawned robot/table/two objects/two goals")
 
     # 5. Ground plane + dome light (global, outside env_*).
     spawn_ground_plane(prim_path="/World/ground", cfg=GroundPlaneCfg())
@@ -284,13 +309,32 @@ def setup_scene(env) -> None:
 
     # 6. Per-env scale tensor for spawned Objects.
     _build_object_scale_tensor(env, object_scales_normalized, len(object_usd_paths))
+    object2_paths = find_matching_prim_paths("/World/envs/env_.*/Object2")
+    if len(object2_paths) != env.num_envs:
+        raise RuntimeError(f"Expected {env.num_envs} Object2 prims, got {len(object2_paths)}")
+    env._object_scale_per_env2 = torch.empty_like(env._object_scale_per_env)
+    env._object_asset_index_per_env2 = torch.empty_like(env._object_asset_index_per_env)
+    for source_idx, path in enumerate(object2_paths):
+        env_id = int(path.rsplit("/", 2)[-2].removeprefix("env_"))
+        asset_index = object2_indices[source_idx % len(object2_indices)]
+        env._object_asset_index_per_env2[env_id] = asset_index
+        env._object_scale_per_env2[env_id] = torch.tensor(
+            object_scales_normalized[asset_index], device=env.device, dtype=torch.float32,
+        )
 
     # 7. Register with scene so DirectRLEnv refreshes their tensors each step.
     env.scene.articulations["robot"] = env.robot
     env.scene.rigid_objects["table"] = env.table
     env.scene.rigid_objects["object"] = env.object
     env.scene.rigid_objects["goal_viz"] = env.goal_viz
+    env.scene.rigid_objects["object2"] = env.object2
+    env.scene.rigid_objects["goal_viz2"] = env.goal_viz2
     hide_goal_viz_for_student_camera(env)
+    if env.cfg.student_obs.enabled and env.cfg.student_obs.hide_goal_viz:
+        from pxr import UsdGeom
+        stage = get_current_stage()
+        for path in find_matching_prim_paths("/World/envs/env_.*/GoalViz2"):
+            UsdGeom.Imageable(stage.GetPrimAtPath(path)).MakeInvisible()
     setup_student_camera(env)
     _log_scene_step(setup_t0, "registered assets with scene")
 
@@ -325,14 +369,14 @@ def apply_physx_material_properties(env) -> None:
     materials[:, tip_mask, 0] = scales[:, None]
     materials[:, tip_mask, 1] = scales[:, None]
     view.set_material_properties(materials, env_ids)
-    for name in ("table", "object", "goal_viz", "hole"):
+    for name in ("table", "object", "object2", "goal_viz", "goal_viz2", "hole"):
         if not hasattr(env, name):
             continue
         obj_view = getattr(env, name).root_physx_view
         obj_materials = obj_view.get_material_properties()
         friction = float(cfg.table_friction if name == "table" else cfg.object_friction)
         obj_materials[:] = torch.tensor([friction, friction, 0.0])
-        if name == "object":
+        if name in ("object", "object2"):
             low, high = map(float, dr.object_friction_scale_range)
             buckets = torch.linspace(low, high, int(dr.friction_n_buckets)) * friction
             values = buckets[torch.randint(0, len(buckets), (env.num_envs,))]

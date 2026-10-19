@@ -152,7 +152,12 @@ def main():
         parser.error("trajectory has no frames")
     dual = data.get("arms", "single") == "dual"
     fps = data.get("fps", 30)
-    models = {name: MeshModel(data[f"{name}_urdf"]) for name in ("robot", "table", "object")}
+    model_names = [name for name in ("robot", "table", "object", "object2") if f"{name}_urdf" in data]
+    models = {name: MeshModel(data[f"{name}_urdf"]) for name in model_names}
+    # Distinguish the independently simulated tools even when geometry matches.
+    if "object2" in models:
+        models["object"].colors[:] = (225, 132, 48)
+        models["object2"].colors[:] = (52, 158, 192)
     faces, colors, offset = [], [], 0
     for model in models.values():
         faces.append(model.faces + offset)
@@ -194,7 +199,8 @@ def main():
             elapsed = frame["step"] * data.get("step_dt", 1 / 60)
             draw_label(image, f"Random actions | actual simulated poses | {elapsed:.2f} s", (28, 65), .57, (85, 101, 118))
             draw_label(image, "Dual arms + dual hands" if dual else "Single arm + single hand", (28, 96), .58)
-            draw_label(image, "Both hands + task object" if dual else "Hand + task object", (left_width + 20, 96), .58)
+            closeup_label = "Both hands + two tools" if "object2" in models else ("Both hands + task object" if dual else "Hand + task object")
+            draw_label(image, closeup_label, (left_width + 20, 96), .58)
             draw_label(image, "CPU rendering of original URDF meshes | Untrained policy", (28, height - 18), .5, (85, 101, 118))
             writer.send(image)
             if index in preview_indices:

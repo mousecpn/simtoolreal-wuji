@@ -39,15 +39,15 @@ OBS_FIELD_SIZES: dict[str, int] = {
     "palm_pos": 6,
     "palm_rot": 8,
     "palm_vel": 12,
-    "object_rot": 4,
-    "object_vel": 6,
+    "object_rot": 8,
+    "object_vel": 12,
     "fingertip_pos_rel_palm": 3 * NUM_FINGERTIPS,  # 30
     "keypoints_rel_palm": 6 * NUM_KEYPOINTS,  # 24
-    "keypoints_rel_goal": 3 * NUM_KEYPOINTS,  # 12
-    "object_scales": 3,
-    "closest_keypoint_max_dist": 1,
+    "keypoints_rel_goal": 6 * NUM_KEYPOINTS,  # 24
+    "object_scales": 6,
+    "closest_keypoint_max_dist": 2,
     "closest_fingertip_dist": NUM_FINGERTIPS,  # 10
-    "lifted_object": 1,
+    "lifted_object": 2,
     "progress": 1,
     "successes": 1,
     "reward": 1,
@@ -112,6 +112,13 @@ def _keypoints_world(
     return center_pos.unsqueeze(1) + quat_apply(rot_r, offsets_r).reshape(n_envs, k, 3)
 
 
+def _tool_keypoints_world(pos, rot, offsets):
+    """Keypoints with independent left/right object axis (N, 2, K, 3)."""
+    n, count = pos.shape[:2]
+    k = offsets.shape[-2]
+    return _keypoints_world(pos.reshape(-1, 3), rot.reshape(-1, 4), offsets.reshape(-1, k, 3)).reshape(n, count, k, 3)
+
+
 def _episode_start(env) -> torch.Tensor:
     return (env.episode_length_buf == 0) & (env._successes == 0)
 
@@ -158,24 +165,20 @@ def compute_intermediate_values(env) -> None:
     term_cfg = env.cfg.termination
     env_origins = env.scene.env_origins
 
-    obj_pos = env.object.data.root_pos_w - env_origins
-    obj_rot = env.object.data.root_quat_w
-    goal_pos = env.goal_viz.data.root_pos_w - env_origins
-    goal_rot = env.goal_viz.data.root_quat_w
-
-    ft_state = env.robot.data.body_state_w[:, env._fingertip_body_ids, :]
-    ft_pos = ft_state[:, :, 0:3] - env_origins.unsqueeze(1)
-    env._curr_fingertip_distances = torch.norm(
-        ft_pos - obj_pos.unsqueeze(1), dim=-1
-    )  # (N, 10)
+    obj_pos = torch.stack([obj.data.root_pos_w - env_origins for obj in env.objects], dim=1)
+    obj_rot = torch.stack([obj.data.root_quat_w for obj in env.objects], dim=1)
+    goal_pos = torch.stack([goal.data.root_pos_w - env_origins for goal in env.goals], dim=1)
+    goal_rot = torch.stack([goal.data.root_quat_w for goal in env.goals], dim=1)
+    ft_pos = env.robot.data.body_state_w[:, env._fingertip_body_ids, :3] - env_origins.unsqueeze(1)
+    env._curr_fingertip_distances = torch.norm(ft_pos - obj_pos.repeat_interleave(5, dim=1), dim=-1)
 
     if rew_cfg.fixed_size_keypoint_reward:
         kp_offsets = env._keypoint_offsets_fixed
     else:
         kp_offsets = env._keypoint_offsets
 
-    obj_kp = _keypoints_world(obj_pos, obj_rot, kp_offsets)
-    goal_kp = _keypoints_world(goal_pos, goal_rot, kp_offsets)
+    obj_kp = _tool_keypoints_world(obj_pos, obj_rot, kp_offsets)
+    goal_kp = _tool_keypoints_world(goal_pos, goal_rot, kp_offsets)
 
     env._keypoints_max_dist = torch.norm(obj_kp - goal_kp, dim=-1).max(dim=-1).values
 
@@ -199,7 +202,8 @@ def compute_intermediate_values(env) -> None:
         near_goal_steps=env._near_goal_steps,
         force_consecutive=term_cfg.force_consecutive_near_goal_steps,
     )
-    env._is_success = env._near_goal_steps >= term_cfg.success_steps
+    env._tool_success = env._near_goal_steps >= term_cfg.success_steps
+    env._is_success = env._tool_success.all(dim=-1)
 
 
 # ----------------------------------------------------------------------------
@@ -210,13 +214,14 @@ def compute_intermediate_values(env) -> None:
 def _apply_object_state_dr(env, obj_pos, obj_rot, obj_linvel, obj_angvel):
     """Apply object-state delay and pose noise."""
     dr = env.cfg.domain_randomization
-    state = torch.cat([obj_pos, obj_rot, obj_linvel, obj_angvel], dim=-1)
+    state = torch.cat([obj_pos, obj_rot, obj_linvel, obj_angvel], dim=-1).reshape(env.num_envs, -1)
     env._object_state_queue, delayed = _sample_delay(
         env._object_state_queue, state, env, flush=_episode_start(env)
     )
-    noisy_pos = delayed[:, 0:3] + torch.randn_like(delayed[:, 0:3]) * dr.object_state_xyz_noise_std
-    noisy_rot = _perturb_quat(delayed[:, 3:7], dr.object_state_rotation_noise_degrees)
-    noisy_vel = delayed[:, 7:13]
+    delayed = delayed.reshape(env.num_envs, 2, 13)
+    noisy_pos = delayed[..., 0:3] + torch.randn_like(delayed[..., 0:3]) * dr.object_state_xyz_noise_std
+    noisy_rot = _perturb_quat(delayed[..., 3:7].reshape(-1, 4), dr.object_state_rotation_noise_degrees).reshape(env.num_envs, 2, 4)
+    noisy_vel = delayed[..., 7:13]
     return noisy_pos, noisy_rot, noisy_vel
 
 
@@ -256,14 +261,13 @@ def build_observations(env) -> dict[str, torch.Tensor]:
         (env.num_envs, NUM_FINGERTIPS),
     )
 
-    obj_pos = env.object.data.root_pos_w - env_origins
-    obj_rot = env.object.data.root_quat_w  # wxyz
-    obj_linvel = env.object.data.root_lin_vel_w
-    obj_angvel = env.object.data.root_ang_vel_w
+    obj_pos = torch.stack([obj.data.root_pos_w - env_origins for obj in env.objects], dim=1)
+    obj_rot = torch.stack([obj.data.root_quat_w for obj in env.objects], dim=1)
+    obj_linvel = torch.stack([obj.data.root_lin_vel_w for obj in env.objects], dim=1)
+    obj_angvel = torch.stack([obj.data.root_ang_vel_w for obj in env.objects], dim=1)
     obj_vel = torch.cat([obj_linvel, obj_angvel], dim=-1)
-
-    goal_pos = env.goal_viz.data.root_pos_w - env_origins
-    goal_rot = env.goal_viz.data.root_quat_w  # wxyz
+    goal_pos = torch.stack([goal.data.root_pos_w - env_origins for goal in env.goals], dim=1)
+    goal_rot = torch.stack([goal.data.root_quat_w for goal in env.goals], dim=1)
 
     if dr.use_object_state_delay_noise:
         noisy_obj_pos, noisy_obj_rot, noisy_obj_vel = _apply_object_state_dr(
@@ -272,10 +276,10 @@ def build_observations(env) -> dict[str, torch.Tensor]:
     else:
         noisy_obj_pos, noisy_obj_rot, noisy_obj_vel = obj_pos, obj_rot, obj_vel
 
-    kp_offsets = env._keypoint_offsets * env._object_scale_multiplier.unsqueeze(1)
-    obj_kp = _keypoints_world(obj_pos, obj_rot, kp_offsets)
-    goal_kp = _keypoints_world(goal_pos, goal_rot, kp_offsets)
-    noisy_obj_kp = _keypoints_world(noisy_obj_pos, noisy_obj_rot, kp_offsets)
+    kp_offsets = env._keypoint_offsets * env._object_scale_multiplier.unsqueeze(2)
+    obj_kp = _tool_keypoints_world(obj_pos, obj_rot, kp_offsets)
+    goal_kp = _tool_keypoints_world(goal_pos, goal_rot, kp_offsets)
+    noisy_obj_kp = _tool_keypoints_world(noisy_obj_pos, noisy_obj_rot, kp_offsets)
 
     # Optional per-env yaw noise on the observed goal (world +Z about goal_pos).
     goal_yaw_obs_noise = getattr(env, "goal_yaw_obs_noise", None)
@@ -284,13 +288,13 @@ def build_observations(env) -> dict[str, torch.Tensor]:
             [0.0, 0.0, 1.0], device=goal_rot.device, dtype=goal_rot.dtype
         ).unsqueeze(0).expand(env.num_envs, -1)
         yaw_q = quat_from_angle_axis(goal_yaw_obs_noise, z_axis)
-        noisy_goal_rot = quat_mul(yaw_q, goal_rot)
-        noisy_goal_kp = _keypoints_world(goal_pos, noisy_goal_rot, kp_offsets)
+        noisy_goal_rot = quat_mul(yaw_q.unsqueeze(1).expand(-1, 2, -1).reshape(-1, 4), goal_rot.reshape(-1, 4)).reshape(env.num_envs, 2, 4)
+        noisy_goal_kp = _tool_keypoints_world(goal_pos, noisy_goal_rot, kp_offsets)
     else:
         noisy_goal_kp = goal_kp
 
-    keypoints_rel_palm_clean = obj_kp.unsqueeze(1) - palm_pos.unsqueeze(2)
-    keypoints_rel_palm_noisy = noisy_obj_kp.unsqueeze(1) - palm_pos.unsqueeze(2)
+    keypoints_rel_palm_clean = obj_kp - palm_pos.unsqueeze(2)
+    keypoints_rel_palm_noisy = noisy_obj_kp - palm_pos.unsqueeze(2)
     keypoints_rel_goal_clean = obj_kp - goal_kp
     keypoints_rel_goal_noisy = noisy_obj_kp - noisy_goal_kp
 
@@ -298,7 +302,7 @@ def build_observations(env) -> dict[str, torch.Tensor]:
         (ft_pos_w - env_origins.unsqueeze(1)) - palm_pos.repeat_interleave(5, dim=1)
     )  # (N, 10, 3)
 
-    object_scales_obs = env._object_scale_per_env * env._object_scale_multiplier
+    object_scales_obs = env._tool_scales * env._object_scale_multiplier
 
     # Policy obs use legacy Isaac Gym xyzw; internal math stays wxyz.
     palm_rot_xyzw = convert_quat(palm_rot, to="xyzw")
@@ -318,9 +322,9 @@ def build_observations(env) -> dict[str, torch.Tensor]:
         "keypoints_rel_palm": keypoints_rel_palm_clean,
         "keypoints_rel_goal": keypoints_rel_goal_clean,
         "object_scales": object_scales_obs,
-        "closest_keypoint_max_dist": env._closest_keypoint_max_dist.unsqueeze(-1),
+        "closest_keypoint_max_dist": env._closest_keypoint_max_dist,
         "closest_fingertip_dist": env._closest_fingertip_dist,
-        "lifted_object": env._lifted_object.float().unsqueeze(-1),
+        "lifted_object": env._lifted_object.float(),
         "progress": torch.log(env.episode_length_buf.float() / 10.0 + 1.0).unsqueeze(-1),
         "successes": torch.log(env._successes.float() + 1.0).unsqueeze(-1),
         "reward": (env.reward_buf * 0.01).unsqueeze(-1),

@@ -4,7 +4,7 @@
 
 Gym ID 为 `Isaacsimenvs-SimToolReal-TianjiWuji-Direct-v0`。原有 `Isaacsimenvs-SimToolReal-Direct-v0` 继续使用 Kuka + Sharpa 配置。
 
-双臂双手使用独立的 Gym ID `Isaacsimenvs-SimToolReal-TianjiWujiDual-Direct-v0` 和 `isaacsimenvs/tasks/tianji_wuji_dual/` 配置；通过训练参数 `--task` 选择。单手 ID、默认设置和动作顺序保持原样。双手版本固定同一躯干，保留 Tianji 左右两条运动链，各连接对应 Wuji 手，操作同一个任务物体。
+双臂双手使用独立的 Gym ID `Isaacsimenvs-SimToolReal-TianjiWujiDual-Direct-v0` 和 `isaacsimenvs/tasks/tianji_wuji_dual/` 配置；通过训练参数 `--task` 选择。单手 ID、默认设置和动作顺序保持原样。双手版本固定同一躯干，保留 Tianji 左右两条运动链，各连接对应 Wuji 手，宽桌面上各放置一个独立工具。左手负责工具 1，右手负责工具 2；各自计算抓取、抬升和目标位姿误差，同时达到各自目标后才记为双手成功。
 
 ```bash
 # 单臂单手（原设置）
@@ -16,7 +16,9 @@ Gym ID 为 `Isaacsimenvs-SimToolReal-TianjiWuji-Direct-v0`。原有 `Isaacsimenv
   --task Isaacsimenvs-SimToolReal-TianjiWujiDual-Direct-v0 --headless
 ```
 
-双手策略为 54 维动作：先左臂 7 + 左手 20，再右臂 7 + 右手 20，各侧采用相同的臂增量和手关节位置控制语义。双手 actor/critic 观测分别为 249/282 维，包含双掌和十个指尖。双手使用独立的 `TianjiWujiDualPPO.yaml` / `TianjiWujiDualSAPG.yaml` 及实验名称。双手策略需要独立训练，不能直接加载单手 checkpoint。
+双手策略为 54 维动作：先左臂 7 + 左手 20，再右臂 7 + 右手 20，各侧采用相同的臂增量和手关节位置控制语义。双手 actor/critic 观测分别为 268/309 维，包含双掌、十个指尖及两个工具的状态与目标。双手使用独立的 `TianjiWujiDualPPO.yaml` / `TianjiWujiDualSAPG.yaml` 及实验名称。双手策略需要独立训练，不能直接加载单手 checkpoint。当前双工具版本的观测维度也与此前单工具双手版本（249/282）不同，旧双手 checkpoint 需要重新训练。
+
+双手桌面沿左右工作区方向（Y）加宽至原来的 3 倍，桌面为 0.475 × 1.2 m，桌高不变。双手工具默认分别在桌面 y = +0.28 m 和 -0.28 m 区域内采样，XY 噪声为 ±0.035 m；每个工具有独立目标，两个目标配对重采样。可通过 `env.tools.object_centers_xy` 调整两个工具的工作区域。单手的桌面、工具数量、初始化和训练设置保持原样。双手不接受仅描述单物体的 `fixed_start_pose`、`fixed_goal_pose` 或 `fixed_trajectory_file` 配置。
 
 ## 运行依赖与资产
 
@@ -123,13 +125,13 @@ source .envrc
 source .envrc
 .venv_isaacsim/bin/python scripts/capture_tianji_wuji_state.py \
   --arms dual --headless --steps 600 --trajectory --frame-stride 2 \
-  --out outputs/tianji_wuji_dual_video/trajectory.json
+  --out outputs/tianji_wuji_dual_two_tools_video/trajectory.json
 .venv_isaacsim/bin/python scripts/render_tianji_wuji_video.py \
-  --trajectory outputs/tianji_wuji_dual_video/trajectory.json \
-  --out outputs/tianji_wuji_dual_video/random_rollout.mp4
+  --trajectory outputs/tianji_wuji_dual_two_tools_video/trajectory.json \
+  --out outputs/tianji_wuji_dual_two_tools_video/random_rollout.mp4
 ```
 
-双手视频根据完整轨迹固定取景，分别展示整机和双手工作区域。画面是实际仿真状态的 mesh 渲染，随机动作不代表策略已学会抓取。换成 `--arms single` 并使用独立输出目录，即可录制原单臂单手环境。轨迹、资产副本、MP4 和预览图保存在 `outputs/`，不纳入 Git。
+双手视频根据完整轨迹固定取景，分别展示整机和双手工作区域。双手录制使用 hammer / screwdriver 候选池，导出两个工具的独立实际轨迹、目标及本次仿真使用的加宽桌面 URDF，两个工具以橙色和青色区分。渲染器也兼容此前只有一个工具的轨迹。画面是实际仿真状态的 mesh 渲染，随机动作不代表策略已学会抓取。换成 `--arms single` 并使用独立输出目录，即可录制原单臂单手环境。轨迹、资产副本、MP4 和预览图保存在 `outputs/`，不纳入 Git。
 
 双手物理验证命令：
 
@@ -139,4 +141,4 @@ source .envrc
   --headless --num_envs 2 --steps 120
 ```
 
-双手已通过两侧臂/手实际运动、120 步随机动作、局部 reset、超时和目标重采样检查；8 个环境的 PPO 完成 2 个 epoch 并保存 checkpoint。这些运行验证不代表已学会双手抓取。
+当前 25 项 CPU 测试通过。双手已通过两侧臂/手实际运动、120 步随机动作、加宽桌面、两个工具独立位置、局部 reset、第二工具掉落重置、超时和配对目标成功检查；8 个环境的双工具 PPO 完成 2 个 epoch 并保存有限数值 checkpoint。这些运行验证不代表已学会双手抓取。

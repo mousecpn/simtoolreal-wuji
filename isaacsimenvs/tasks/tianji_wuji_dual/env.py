@@ -1,16 +1,9 @@
-"""Bimanual tool lifting / goal-pose reaching with one shared object.
-
-The canonical policy order is left arm (7), left hand (20), right arm (7),
-right hand (20). All ten fingertips receive reaching progress reward; object
-lifting, pose goals, success counters and curricula remain shared. Velocity
-penalties include both arms and both hands.
-"""
+"""Bimanual tool lifting: each Tianji/Wuji hand controls its own tool."""
 import torch
 from isaaclab.envs import DirectRLEnv
 
-from ..simtoolreal.utils.action_utils import apply_wrench_dr
 from ..simtoolreal.utils.logging_utils import log_step_metrics
-from ..simtoolreal.utils.reward_utils import compute_rewards
+from .rewards import compute_rewards, apply_wrench_dr
 from .actions import apply_action_pipeline
 from .config import TianjiWujiDualEnvCfg
 from .observations import compute_obs_dim, compute_intermediate_values, build_observations, build_student_observations

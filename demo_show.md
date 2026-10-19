@@ -172,10 +172,10 @@ Tianji/Wuji 使用独立脚本，不使用上述 Kuka/Sharpa 预训练 checkpoin
 source .envrc
 .venv_isaacsim/bin/python scripts/capture_tianji_wuji_state.py \
   --arms dual --headless --steps 600 --trajectory --frame-stride 2 \
-  --out outputs/tianji_wuji_dual_video/trajectory.json
+  --out outputs/tianji_wuji_dual_two_tools_video/trajectory.json
 .venv_isaacsim/bin/python scripts/render_tianji_wuji_video.py \
-  --trajectory outputs/tianji_wuji_dual_video/trajectory.json \
-  --out outputs/tianji_wuji_dual_video/random_rollout.mp4
+  --trajectory outputs/tianji_wuji_dual_two_tools_video/trajectory.json \
+  --out outputs/tianji_wuji_dual_two_tools_video/random_rollout.mp4
 ```
 
-视频及首、中、末帧预览写入该输出目录。它展示随机动作下的仿真状态，并非训练策略效果。训练时使用 `--task Isaacsimenvs-SimToolReal-TianjiWujiDual-Direct-v0` 选择双手，使用 `--task Isaacsimenvs-SimToolReal-TianjiWuji-Direct-v0` 选择单手。完整说明见 [Tianji/Wuji 训练指南](docs/tianji_wuji_training.md)。
+双手版本使用加宽桌面与两个独立工具；视频导出实际桌面尺寸和两个工具的物理轨迹，以橙色 / 青色区分工具。视频及首、中、末帧预览写入该输出目录。它展示随机动作下的仿真状态，并非训练策略效果。训练时使用 `--task Isaacsimenvs-SimToolReal-TianjiWujiDual-Direct-v0` 选择双手，使用 `--task Isaacsimenvs-SimToolReal-TianjiWuji-Direct-v0` 选择单手。完整说明见 [Tianji/Wuji 训练指南](docs/tianji_wuji_training.md)。

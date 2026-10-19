@@ -23,13 +23,26 @@ class TianjiWujiDualRobotCfg:
 
 
 @configclass
+class TianjiWujiDualToolsCfg:
+    """Separate workspaces for the left and right hand (env-local metres)."""
+    object_centers_xy: tuple[tuple[float, float], ...] = ((0., 0.28), (0., -0.28))
+    spawn_xy_noise: tuple[float, float] = (0.035, 0.035)
+    goal_y_offsets: tuple[float, float] = (0.28, -0.28)
+
+
+@configclass
 class TianjiWujiDualEnvCfg(SimToolRealEnvCfg):
     action_space: int = 54
-    observation_space: int = 249
-    state_space: int = 282
+    observation_space: int = 268
+    state_space: int = 309
     robot: TianjiWujiDualRobotCfg = TianjiWujiDualRobotCfg()
+    tools: TianjiWujiDualToolsCfg = TianjiWujiDualToolsCfg()
     # Generated from bundled Tianji/Wuji sources at launch.
-    assets: AssetsCfg = AssetsCfg(robot_urdf="", num_assets_per_type=10)
+    assets: AssetsCfg = AssetsCfg(
+        robot_urdf="", num_assets_per_type=10,
+        # The original table is 0.475 x 0.4 m; cover both hand workspaces.
+        table_scale_range_y=(3.0, 3.0),
+    )
     scene: InteractiveSceneCfg = InteractiveSceneCfg(
         num_envs=1024, env_spacing=2.0,
         replicate_physics=False, clone_in_fabric=False,
@@ -44,5 +57,6 @@ class TianjiWujiDualEnvCfg(SimToolRealEnvCfg):
         self.student_obs.raycast_dynamic_prim_exprs = (
             "/World/envs/env_.*/Table/box/visuals",
             "/World/envs/env_.*/Object/.*/visuals",
+            "/World/envs/env_.*/Object2/.*/visuals",
             "/World/envs/env_.*/Robot/.*/visuals",
         )

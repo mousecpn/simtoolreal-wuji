@@ -39,7 +39,7 @@ def main():
             task = "Isaacsimenvs-SimToolReal-TianjiWuji-Direct-v0"
         cfg.seed = 42
         cfg.scene.num_envs = 1
-        cfg.assets.handle_head_types = ("hammer",)
+        cfg.assets.handle_head_types = ("hammer", "screwdriver") if args.arms == "dual" else ("hammer",)
         cfg.assets.num_assets_per_type = 1
         env = gym.make(task, cfg=cfg)
         inner = env.unwrapped
@@ -52,7 +52,7 @@ def main():
             return value.cpu().tolist()
 
         def frame(step):
-            return {
+            result = {
                 "step": step,
                 "robot_root_pose": pose(inner.robot),
                 "joint_positions": dict(zip(inner.robot.data.joint_names, inner.robot.data.joint_pos[0].cpu().tolist())),
@@ -60,6 +60,10 @@ def main():
                 "object_root_pose": pose(inner.object),
                 "goal_root_pose": pose(inner.goal_viz),
             }
+            if hasattr(inner, "object2"):
+                result["object2_root_pose"] = pose(inner.object2)
+                result["goal2_root_pose"] = pose(inner.goal_viz2)
+            return result
 
         frames = [frame(0)] if args.trajectory else []
         # A small random arm command and slowly varying random finger targets.
@@ -77,6 +81,7 @@ def main():
                 frames.append(frame(step + 1))
 
         index = int(inner._object_asset_index_per_env[0])
+        table_index = int(inner._table_asset_index_per_env[0]) if hasattr(inner, "_table_asset_index_per_env") else 0
         snapshot = {
             "arms": args.arms,
             "task": task,
@@ -85,12 +90,22 @@ def main():
             "robot_urdf": inner._robot_urdf_path,
             "robot_root_pose": pose(inner.robot),
             "joint_positions": dict(zip(inner.robot.data.joint_names, inner.robot.data.joint_pos[0].cpu().tolist())),
-            "table_urdf": str(Path(cfg.assets.table_urdf).resolve()),
+            "table_urdf": str(Path(inner._table_urdf_paths[table_index]).resolve())
+                if hasattr(inner, "_table_urdf_paths") else str(Path(cfg.assets.table_urdf).resolve()),
             "table_root_pose": pose(inner.table),
             "object_urdf": inner._object_urdf_paths[index],
             "object_root_pose": pose(inner.object),
             "goal_root_pose": pose(inner.goal_viz),
         }
+        if hasattr(inner, "object2"):
+            index2 = int(inner._object_asset_index_per_env2[0])
+            snapshot.update(
+                object2_urdf=inner._object_urdf_paths[index2],
+                object2_root_pose=pose(inner.object2),
+                goal2_root_pose=pose(inner.goal_viz2),
+            )
+        if hasattr(inner, "_table_variant_scales"):
+            snapshot["table_scale_xy"] = inner._table_variant_scales[table_index]
         args.out.parent.mkdir(parents=True, exist_ok=True)
         if args.trajectory:
             # Keep exported trajectories renderable after /tmp cleanup.
@@ -99,7 +114,9 @@ def main():
             robot_dir = asset_dir / "robot"
             shutil.copytree(Path(snapshot["robot_urdf"]).parent, robot_dir, dirs_exist_ok=True)
             snapshot["robot_urdf"] = str((robot_dir / Path(snapshot["robot_urdf"]).name).resolve())
-            for name in ("table", "object"):
+            for name in ("table", "object", "object2"):
+                if f"{name}_urdf" not in snapshot:
+                    continue
                 source = Path(snapshot[f"{name}_urdf"])
                 target = asset_dir / f"{name}.urdf"
                 shutil.copy2(source, target)

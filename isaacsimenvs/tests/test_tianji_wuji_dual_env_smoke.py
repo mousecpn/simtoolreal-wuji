@@ -75,8 +75,18 @@ def main():
         assert [DOF_NAMES[i] for i in inner._perm_canon_to_lab.tolist()] == names
         assert inner.cfg.action_space == 54
         assert inner.single_action_space.shape == (54,)
-        for suffix in ("Object", "GoalViz", "Robot"):
+        for suffix in ("Object", "Object2", "GoalViz", "GoalViz2", "Robot"):
             assert len(find_matching_prim_paths(f"/World/envs/env_.*/{suffix}")) == args.num_envs
+        assert len(inner.objects) == len(inner.goals) == 2
+        local = torch.stack([obj.data.root_pos_w - inner.scene.env_origins for obj in inner.objects], dim=1)
+        assert (local[:, 0, 1] > .2).all() and (local[:, 1, 1] < -.2).all()
+        assert (torch.norm(local[:, 0, :2] - local[:, 1, :2], dim=-1) > .4).all()
+        assert (inner._object_asset_index_per_env != inner._object_asset_index_per_env2).all()
+        assert all(scale[1] == 3. for scale in inner._table_variant_scales)
+        import xml.etree.ElementTree as ET
+        for path in inner._table_urdf_paths:
+            size = [float(x) for x in ET.parse(path).find(".//visual/geometry/box").get("size").split()]
+            assert size[1] >= 1.19, size
         finite_observations(obs)
         valid_targets()
 
@@ -113,13 +123,14 @@ def main():
         before = {name: getattr(inner, name)[1:].clone() for name in (
             "_cur_targets", "_prev_targets", "_successes", "episode_length_buf", "_action_queue",
         )}
-        untouched_object = inner.object.data.root_state_w[1:].clone()
+        untouched_objects = [obj.data.root_state_w[1:].clone() for obj in inner.objects]
         inner._successes[0] = 3
         inner._action_queue[0] = .7
         inner._reset_idx(selected)
         for name, value in before.items():
             torch.testing.assert_close(getattr(inner, name)[1:], value, rtol=0, atol=0)
-        torch.testing.assert_close(inner.object.data.root_state_w[1:], untouched_object, rtol=0, atol=0)
+        for obj, untouched in zip(inner.objects, untouched_objects):
+            torch.testing.assert_close(obj.data.root_state_w[1:], untouched, rtol=0, atol=0)
         assert inner.episode_length_buf[0] == inner._successes[0] == 0
         assert not inner._action_queue[0].any()
         valid_targets()
@@ -133,27 +144,47 @@ def main():
         assert inner.episode_length_buf[0] == 0, "timed-out clone did not reset"
         finite_observations(obs)
 
-        # Align the live goal to the live object, then exercise the actual done
-        # hook without a physics tick moving the object away from that pose.
+        # Reaching one tool's goal must not count as a complete paired success.
         env.reset()
-        object_pose = inner.object.data.root_state_w[0:1, :7].clone()
-        inner.goal_viz.write_root_pose_to_sim(object_pose, env_ids=selected)
+        object_poses = [obj.data.root_state_w[0:1, :7].clone() for obj in inner.objects]
+        inner.goals[0].write_root_pose_to_sim(object_poses[0], env_ids=selected)
         inner._near_goal_steps.zero_()
         inner._near_goal_steps[0] = cfg.termination.success_steps - 1
-        inner.episode_length_buf[0] = 7
         successes = inner._successes.clone()
-        untouched_goal = inner.goal_viz.data.root_state_w[1:, :7].clone()
+        before_goals = [goal.data.root_state_w[:, :7].clone() for goal in inner.goals]
+        inner._get_dones()
+        assert not inner._is_success[0], "one tool incorrectly counted as paired success"
+        torch.testing.assert_close(inner._successes, successes)
+        for goal, before in zip(inner.goals, before_goals):
+            torch.testing.assert_close(goal.data.root_state_w[:, :7], before, rtol=0, atol=0)
+
+        # Both tools reaching their own goals resamples both goals for only this clone.
+        for goal, pose in zip(inner.goals, object_poses):
+            goal.write_root_pose_to_sim(pose, env_ids=selected)
+        inner._near_goal_steps[0] = cfg.termination.success_steps - 1
+        inner.episode_length_buf[0] = 7
+        untouched_goals = [goal.data.root_state_w[1:, :7].clone() for goal in inner.goals]
         terminated, truncated = inner._get_dones()
-        assert inner._is_success[0], "matching object and goal did not count as success"
+        assert inner._is_success[0]
         assert inner._successes[0] == successes[0] + 1
         assert inner.episode_length_buf[0] == 0
-        assert inner._near_goal_steps[0] == 0
+        assert not inner._near_goal_steps[0].any()
         assert not terminated[0] and not truncated[0]
-        assert not torch.allclose(inner.goal_viz.data.root_state_w[0:1, :7], object_pose), "goal was not resampled"
-        torch.testing.assert_close(inner.goal_viz.data.root_state_w[1:, :7], untouched_goal, rtol=0, atol=0)
+        for goal, pose, untouched in zip(inner.goals, object_poses, untouched_goals):
+            assert not torch.allclose(goal.data.root_state_w[0:1, :7], pose)
+            torch.testing.assert_close(goal.data.root_state_w[1:, :7], untouched, rtol=0, atol=0)
+
+        # The second tool participates in termination and full reset.
+        fallen = inner.object2.data.root_state_w[0:1, :7].clone()
+        fallen[:, 2] = inner.scene.env_origins[0, 2] - .2
+        inner.object2.write_root_pose_to_sim(fallen, env_ids=selected)
+        terminated, _ = inner._get_dones()
+        assert terminated[0] and inner._termination_reasons["fall"][0]
+        inner._reset_idx(selected)
+        assert inner.object2.data.root_pos_w[0, 2] > inner.scene.env_origins[0, 2] + .3
         finite_observations(inner._get_observations())
         print(f"[tianji-wuji dual smoke] PASS: {args.num_envs} clones, 54 joints/actions, "
-              f"{cfg.observation_space}/{cfg.state_space} observations, {args.steps} random steps, subset reset, timeout and goal success")
+              f"{cfg.observation_space}/{cfg.state_space} observations, {args.steps} random steps, two tools, widened table, subset reset, timeout and paired goal success")
     except BaseException:
         # Kit's fast shutdown may bypass Python's uncaught-exception printer.
         import traceback
