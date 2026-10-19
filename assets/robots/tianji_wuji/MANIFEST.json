@@ -1,0 +1,784 @@
+{
+  "format_version": 1,
+  "description": "Complete source asset inventory; README and this manifest are metadata, excluded from payload hashes.",
+  "upstream_revisions": {
+    "DexTele": "fbc3d487d1f975954fd90b75185ed9ff18da9388",
+    "sim_infra": "39104253416b1203a041812159cbbc515fe01809"
+  },
+  "files": [
+    {
+      "path": "robots/tianji/scene_tianji_arm_only.xml",
+      "size_bytes": 22815,
+      "sha256": "3dda1a03b0251d5e1d66e82e1eb241684dd04a37eb530999849886a13746ae73",
+      "source_repository": "DexTele",
+      "source_path": "robots/tianji/scene_tianji_arm_only.xml",
+      "source_sha256": "faeebc9f0139ba1edc33b5dc05d6f72b4338c3a10a40d6389813ce2175d2b4a1",
+      "modifications": "Relative mesh paths rewritten for this package."
+    },
+    {
+      "path": "robots/tianji/scene_tianji_left_arm.xml",
+      "size_bytes": 13310,
+      "sha256": "8095f23e41dd64908984428e1197cb1796c59a66ed7473bd70109b22eec27981",
+      "source_repository": "DexTele",
+      "source_path": "robots/tianji/scene_tianji_left_arm.xml",
+      "source_sha256": "39a2f57a1d7129d3eecc80ff77eb58eccb8d7751ffe3ce2c15de663e0f2100e1",
+      "modifications": "Relative mesh paths rewritten for this package."
+    },
+    {
+      "path": "robots/tianji/scene_tianji_left_arm_hand.xml",
+      "size_bytes": 46512,
+      "sha256": "0fd8fe74908ae8bd6f53aac4c586da8bdbb373c32a617442bfb46e32e0b2e7b0",
+      "source_repository": "DexTele",
+      "source_path": "robots/tianji/scene_tianji_left_arm_hand.xml",
+      "source_sha256": "0056782db7404fa3893e50bd14995aa673cdfff3c99966c63b02c50c04cffc8b",
+      "modifications": "Relative mesh paths rewritten for this package."
+    },
+    {
+      "path": "robots/tianji/scene_tianji_right_arm.xml",
+      "size_bytes": 13405,
+      "sha256": "166807e6c3a80fea8e781c4364fbdb23aeb2860cf7e89ae68690a207082b1760",
+      "source_repository": "DexTele",
+      "source_path": "robots/tianji/scene_tianji_right_arm.xml",
+      "source_sha256": "0c470d68a7598df76f1eecf487351d932b9790a7d86d7d68a0a904d49f49f022",
+      "modifications": "Relative mesh paths rewritten for this package."
+    },
+    {
+      "path": "robots/tianji/scene_tianji_right_arm_hand.xml",
+      "size_bytes": 46850,
+      "sha256": "cbdb6be981dc48600d21e354831802e526cd6922474e37b116140aa1d01fe2b0",
+      "source_repository": "DexTele",
+      "source_path": "robots/tianji/scene_tianji_right_arm_hand.xml",
+      "source_sha256": "ae7852e02c57ac10a4235d1da695ae3959a9e437d72390c5fd04ddaadbd8dba5",
+      "modifications": "Relative mesh paths rewritten for this package."
+    },
+    {
+      "path": "robots/tianji/scene_tianji_right_hand_mocap.xml",
+      "size_bytes": 28890,
+      "sha256": "a61a5a1818f0d7d8bbade8d78ecfd7bf6c1f49a1b64dde22589fbd1aa7653677",
+      "source_repository": "DexTele",
+      "source_path": "robots/tianji/scene_tianji_right_hand_mocap.xml",
+      "source_sha256": "1e1dfa00d8aef979a1562a71a30a863ee237cbed8e86e1c94f911c3cadda7b56",
+      "modifications": "Relative mesh paths rewritten for this package."
+    },
+    {
+      "path": "robots/tianji/scene_tianji_wuji_full.xml",
+      "size_bytes": 108163,
+      "sha256": "0c52bb5b196c7c050cfdb7b67f08b6927f69ed2eefe8589d2781441fb0138699",
+      "source_repository": "DexTele",
+      "source_path": "robots/tianji/scene_tianji_wuji_full.xml",
+      "source_sha256": "4893f0f1eea1e702eb5d6bccf71f9eee72d842fcd759f156aab0b5885ef664e9",
+      "modifications": "Relative mesh paths rewritten for this package."
+    },
+    {
+      "path": "robots/tianji/scene_tianji_wuji_sim_infra.xml",
+      "size_bytes": 970,
+      "sha256": "ee22fd0c50233533703c12d171c589251e57c1c33ed5f56642c078560672cd58",
+      "source_repository": "DexTele",
+      "source_path": "robots/tianji/scene_tianji_wuji_sim_infra.xml",
+      "source_sha256": "ee22fd0c50233533703c12d171c589251e57c1c33ed5f56642c078560672cd58",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/tianji_marvin_CCS_real_limit.xml",
+      "size_bytes": 9442,
+      "sha256": "e7d06c7e3a703a5d6121c42b7ee62174b45e668eb72817b8df882b3d384d7e98",
+      "source_repository": "DexTele",
+      "source_path": "robots/tianji/tianji_marvin_CCS_real_limit.xml",
+      "source_sha256": "8eee12afe8e0fcca1150c3bd9305521b5da170b2900cfbbc821f333a4f8e1f5c",
+      "modifications": "Relative mesh paths rewritten for this package."
+    },
+    {
+      "path": "robots/tianji/tianji_marvin_CCS_real_limit_wuji.xml",
+      "size_bytes": 58179,
+      "sha256": "966a828a59f22a34295874a6ba6323ee246899ddb1f07bfa3c1b1f30ea377a31",
+      "source_repository": "DexTele",
+      "source_path": "robots/tianji/tianji_marvin_CCS_real_limit_wuji.xml",
+      "source_sha256": "46a175c3c866b41818242c9f6f8aea1a30321229cc30ce598eda1c519ac8271b",
+      "modifications": "Relative mesh paths rewritten for this package."
+    },
+    {
+      "path": "robots/tianji/tianji_marvin_CCS_real_limit_wuji_sim_infra.xml",
+      "size_bytes": 58658,
+      "sha256": "607540d34010a548a03b29cc643f217c9d5530e32faecf80e3c8b022f2be4fa2",
+      "source_repository": "DexTele",
+      "source_path": "robots/tianji/tianji_marvin_CCS_real_limit_wuji_sim_infra.xml",
+      "source_sha256": "607540d34010a548a03b29cc643f217c9d5530e32faecf80e3c8b022f2be4fa2",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/tianji_marvin_CCS_real_limit_wuji_sim_infra_col.xml",
+      "size_bytes": 62223,
+      "sha256": "022c206b50c8d5ea3ffccc09e1f197aaf523fc68b104aa0b669b941112b625f3",
+      "source_repository": "DexTele",
+      "source_path": "robots/tianji/tianji_marvin_CCS_real_limit_wuji_sim_infra_col.xml",
+      "source_sha256": "022c206b50c8d5ea3ffccc09e1f197aaf523fc68b104aa0b669b941112b625f3",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/tianji_marvin_CCS.urdf",
+      "size_bytes": 19397,
+      "sha256": "901e0c97f0f95694e234c20cfc62b58866f6186b8f4c691ce35e2447859ee826",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/tianji_marvin_ccs_696/tianji_marvin_CCS.urdf",
+      "source_sha256": "3c022d5f6329333e55a1c568190a1fa324b9830d8a3c8de4359c7316078176dc",
+      "modifications": "Relative mesh paths rewritten for this package."
+    },
+    {
+      "path": "robots/tianji/meshes_sim_infra/SRS/BASE_696.stl",
+      "size_bytes": 1453984,
+      "sha256": "6603ceaf819bcfa59d947cf9dcd5b861aa98cee117190f3f3959149a2ffbc12c",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/tianji_marvin_ccs_696/meshes/SRS/BASE_696.stl",
+      "source_sha256": "6603ceaf819bcfa59d947cf9dcd5b861aa98cee117190f3f3959149a2ffbc12c",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/meshes_sim_infra/left_arm/Base_L.STL",
+      "size_bytes": 204584,
+      "sha256": "f22c309ed8cacd2fc776e2f72a2fc5618d9da84315267377edd3205e91ebbcb5",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/tianji_marvin_ccs_696/meshes/left_arm/Base_L.STL",
+      "source_sha256": "f22c309ed8cacd2fc776e2f72a2fc5618d9da84315267377edd3205e91ebbcb5",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/meshes_sim_infra/left_arm/Link1_L.STL",
+      "size_bytes": 563584,
+      "sha256": "d00097eec49600a4111ee5a124d6636f50ea09a7a1dc8486d98f4370dde7a932",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/tianji_marvin_ccs_696/meshes/left_arm/Link1_L.STL",
+      "source_sha256": "d00097eec49600a4111ee5a124d6636f50ea09a7a1dc8486d98f4370dde7a932",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/meshes_sim_infra/left_arm/Link2_L.STL",
+      "size_bytes": 1278784,
+      "sha256": "4776a6a2086ddc61b1643aff93386e545baccef2751db29d863fe027a76f325e",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/tianji_marvin_ccs_696/meshes/left_arm/Link2_L.STL",
+      "source_sha256": "4776a6a2086ddc61b1643aff93386e545baccef2751db29d863fe027a76f325e",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/meshes_sim_infra/left_arm/Link3_L.STL",
+      "size_bytes": 635484,
+      "sha256": "d58f1039bd3eb2ccc1a1959b89d2de7ae714344ad8cb8b78ef97b92dcd317d26",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/tianji_marvin_ccs_696/meshes/left_arm/Link3_L.STL",
+      "source_sha256": "d58f1039bd3eb2ccc1a1959b89d2de7ae714344ad8cb8b78ef97b92dcd317d26",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/meshes_sim_infra/left_arm/Link4_L.STL",
+      "size_bytes": 1263484,
+      "sha256": "77f18566339f38acac1785fae517b05ff1e5247b95404ce26536d215bbed9cd7",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/tianji_marvin_ccs_696/meshes/left_arm/Link4_L.STL",
+      "source_sha256": "77f18566339f38acac1785fae517b05ff1e5247b95404ce26536d215bbed9cd7",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/meshes_sim_infra/left_arm/Link5_L.STL",
+      "size_bytes": 1176084,
+      "sha256": "573f15ee62b0a9b2d62aceeb756800fd86969a685535e91416b73d51f1c57613",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/tianji_marvin_ccs_696/meshes/left_arm/Link5_L.STL",
+      "source_sha256": "573f15ee62b0a9b2d62aceeb756800fd86969a685535e91416b73d51f1c57613",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/meshes_sim_infra/left_arm/Link6_L.STL",
+      "size_bytes": 310884,
+      "sha256": "b6b7570d8ebf1d2acb01baf8941b892f5a5f72aaa05503ab8340da8a2a7b2c13",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/tianji_marvin_ccs_696/meshes/left_arm/Link6_L.STL",
+      "source_sha256": "b6b7570d8ebf1d2acb01baf8941b892f5a5f72aaa05503ab8340da8a2a7b2c13",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/meshes_sim_infra/left_arm/Link7_L.STL",
+      "size_bytes": 2557184,
+      "sha256": "126cc7d41c37049ce34d2636bfe2d460c21e3429ed080877d1c5e983109ef798",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/tianji_marvin_ccs_696/meshes/left_arm/Link7_L.STL",
+      "source_sha256": "126cc7d41c37049ce34d2636bfe2d460c21e3429ed080877d1c5e983109ef798",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/meshes_sim_infra/right_arm/Base_R.STL",
+      "size_bytes": 204584,
+      "sha256": "f22c309ed8cacd2fc776e2f72a2fc5618d9da84315267377edd3205e91ebbcb5",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/tianji_marvin_ccs_696/meshes/right_arm/Base_R.STL",
+      "source_sha256": "f22c309ed8cacd2fc776e2f72a2fc5618d9da84315267377edd3205e91ebbcb5",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/meshes_sim_infra/right_arm/Link1_R.STL",
+      "size_bytes": 563584,
+      "sha256": "fdb1075fe0b41e5c2cb7c2fe13c9d2e62ff4dd6eb540ea841b8603db28369dd0",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/tianji_marvin_ccs_696/meshes/right_arm/Link1_R.STL",
+      "source_sha256": "fdb1075fe0b41e5c2cb7c2fe13c9d2e62ff4dd6eb540ea841b8603db28369dd0",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/meshes_sim_infra/right_arm/Link2_R.STL",
+      "size_bytes": 1278784,
+      "sha256": "53eb9fc69c939d2ebd4f32c1df341c1c42bc3d9d0911db0c9fcee70aa2701b34",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/tianji_marvin_ccs_696/meshes/right_arm/Link2_R.STL",
+      "source_sha256": "53eb9fc69c939d2ebd4f32c1df341c1c42bc3d9d0911db0c9fcee70aa2701b34",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/meshes_sim_infra/right_arm/Link3_R.STL",
+      "size_bytes": 635484,
+      "sha256": "122456d8fc3e81694f352fc1f29d0bc19066f7f3d7572857a1be1e7c030dec9c",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/tianji_marvin_ccs_696/meshes/right_arm/Link3_R.STL",
+      "source_sha256": "122456d8fc3e81694f352fc1f29d0bc19066f7f3d7572857a1be1e7c030dec9c",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/meshes_sim_infra/right_arm/Link4_R.STL",
+      "size_bytes": 1263484,
+      "sha256": "77f18566339f38acac1785fae517b05ff1e5247b95404ce26536d215bbed9cd7",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/tianji_marvin_ccs_696/meshes/right_arm/Link4_R.STL",
+      "source_sha256": "77f18566339f38acac1785fae517b05ff1e5247b95404ce26536d215bbed9cd7",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/meshes_sim_infra/right_arm/Link5_R.STL",
+      "size_bytes": 1196684,
+      "sha256": "2de51a340695c89b2fd58b1171dfacc4d85aa4e6cd50879e021a2d0bde8599a8",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/tianji_marvin_ccs_696/meshes/right_arm/Link5_R.STL",
+      "source_sha256": "2de51a340695c89b2fd58b1171dfacc4d85aa4e6cd50879e021a2d0bde8599a8",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/meshes_sim_infra/right_arm/Link6_R.STL",
+      "size_bytes": 310884,
+      "sha256": "49722d14b9ac34a84a41c95f49bd0b2a8859d4a05f66b247822bf36b0a703cd5",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/tianji_marvin_ccs_696/meshes/right_arm/Link6_R.STL",
+      "source_sha256": "49722d14b9ac34a84a41c95f49bd0b2a8859d4a05f66b247822bf36b0a703cd5",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/meshes_sim_infra/right_arm/Link7_R.STL",
+      "size_bytes": 2577384,
+      "sha256": "6eb75b059ff383e90a153be840bcce84b23d8f8afd074b1bc9dfec1b18c2351f",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/tianji_marvin_ccs_696/meshes/right_arm/Link7_R.STL",
+      "source_sha256": "6eb75b059ff383e90a153be840bcce84b23d8f8afd074b1bc9dfec1b18c2351f",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/left.xml",
+      "size_bytes": 20231,
+      "sha256": "84e3ff029b3e7e6e5f31000df63f8dbd58402b2221e459268e615114ed1a1b19",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/left.xml",
+      "source_sha256": "84e3ff029b3e7e6e5f31000df63f8dbd58402b2221e459268e615114ed1a1b19",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/left/left_finger1_link1.STL",
+      "size_bytes": 389384,
+      "sha256": "ef6226834aafe36a718c3bdedd6a8a53ac076d833f4c989c4259fe111098426e",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/left/left_finger1_link1.STL",
+      "source_sha256": "ef6226834aafe36a718c3bdedd6a8a53ac076d833f4c989c4259fe111098426e",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/left/left_finger1_link2.STL",
+      "size_bytes": 91484,
+      "sha256": "4b95c67bfb2d87a9f0bd6ab1cafcad27229eecdd7d22510681f1d394d4249e7c",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/left/left_finger1_link2.STL",
+      "source_sha256": "4b95c67bfb2d87a9f0bd6ab1cafcad27229eecdd7d22510681f1d394d4249e7c",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/left/left_finger1_link3.STL",
+      "size_bytes": 99384,
+      "sha256": "2a6ba5a4d292b33a972760cd2e536e3bb0b7ff11f3ba070d2ff6b9a4a347e9cb",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/left/left_finger1_link3.STL",
+      "source_sha256": "2a6ba5a4d292b33a972760cd2e536e3bb0b7ff11f3ba070d2ff6b9a4a347e9cb",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/left/left_finger1_link4.STL",
+      "size_bytes": 64584,
+      "sha256": "bcb512d59797e4da81d166c7118197a5f5c6b397091617ca189a56dbbd9b74c9",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/left/left_finger1_link4.STL",
+      "source_sha256": "bcb512d59797e4da81d166c7118197a5f5c6b397091617ca189a56dbbd9b74c9",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/left/left_finger1_tip_link.STL",
+      "size_bytes": 96384,
+      "sha256": "83c92a6c07f7c3c9833d56c4cc2d4fc29d691ff458a75d766f16668aa3b7a906",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/left/left_finger1_tip_link.STL",
+      "source_sha256": "83c92a6c07f7c3c9833d56c4cc2d4fc29d691ff458a75d766f16668aa3b7a906",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/left/left_finger2_link1.STL",
+      "size_bytes": 67584,
+      "sha256": "afb3cd29a430e31e1c972b0165f942e95e56e33da80fc234b5c474231f00ce63",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/left/left_finger2_link1.STL",
+      "source_sha256": "afb3cd29a430e31e1c972b0165f942e95e56e33da80fc234b5c474231f00ce63",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/left/left_finger2_link2.STL",
+      "size_bytes": 55484,
+      "sha256": "02c12143eabd598559b9893ba7e8642b2510abd25fa06d968c8183e625f19ec5",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/left/left_finger2_link2.STL",
+      "source_sha256": "02c12143eabd598559b9893ba7e8642b2510abd25fa06d968c8183e625f19ec5",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/left/left_finger2_link3.STL",
+      "size_bytes": 133184,
+      "sha256": "764426f6623a6809565954770980dccfe5694d7c822b3035c75e3fad14712601",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/left/left_finger2_link3.STL",
+      "source_sha256": "764426f6623a6809565954770980dccfe5694d7c822b3035c75e3fad14712601",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/left/left_finger2_link4.STL",
+      "size_bytes": 54884,
+      "sha256": "32419448505112baa15a7c39613051bdb463cf0e0f235ce5583c582151c9aa4b",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/left/left_finger2_link4.STL",
+      "source_sha256": "32419448505112baa15a7c39613051bdb463cf0e0f235ce5583c582151c9aa4b",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/left/left_finger2_tip_link.STL",
+      "size_bytes": 112784,
+      "sha256": "ef47c5b835948311609616142247f6e764adf2fc1e060d620f64fd19efef9458",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/left/left_finger2_tip_link.STL",
+      "source_sha256": "ef47c5b835948311609616142247f6e764adf2fc1e060d620f64fd19efef9458",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/left/left_finger3_link1.STL",
+      "size_bytes": 67584,
+      "sha256": "92839a1448fad363032f9a2cff0e660846a89ff15cf1233ab88e0adab5670466",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/left/left_finger3_link1.STL",
+      "source_sha256": "92839a1448fad363032f9a2cff0e660846a89ff15cf1233ab88e0adab5670466",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/left/left_finger3_link2.STL",
+      "size_bytes": 55484,
+      "sha256": "b538ab9ce27e19931553f2ef2b001788cf75bd7503bf955febc3acc96b9f3074",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/left/left_finger3_link2.STL",
+      "source_sha256": "b538ab9ce27e19931553f2ef2b001788cf75bd7503bf955febc3acc96b9f3074",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/left/left_finger3_link3.STL",
+      "size_bytes": 133184,
+      "sha256": "795ecf9b1fe67da36cea333d47bce7e7dc8339c058d9d6dc6dd954c93beb3ba6",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/left/left_finger3_link3.STL",
+      "source_sha256": "795ecf9b1fe67da36cea333d47bce7e7dc8339c058d9d6dc6dd954c93beb3ba6",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/left/left_finger3_link4.STL",
+      "size_bytes": 54884,
+      "sha256": "e2428e5723d829567c1905d0253a38075081472f1cf5b6a91622ccc23b66a915",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/left/left_finger3_link4.STL",
+      "source_sha256": "e2428e5723d829567c1905d0253a38075081472f1cf5b6a91622ccc23b66a915",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/left/left_finger3_tip_link.STL",
+      "size_bytes": 112784,
+      "sha256": "36b33404458a39a8e87dcc2e842f3d2679439f2a02dce37d441304060e6a235b",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/left/left_finger3_tip_link.STL",
+      "source_sha256": "36b33404458a39a8e87dcc2e842f3d2679439f2a02dce37d441304060e6a235b",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/left/left_finger4_link1.STL",
+      "size_bytes": 67584,
+      "sha256": "34372b6d907d7a8d0b9c7ab776398b9b9ea034ba05a6e17bbd5cb4eb7ee26e1d",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/left/left_finger4_link1.STL",
+      "source_sha256": "34372b6d907d7a8d0b9c7ab776398b9b9ea034ba05a6e17bbd5cb4eb7ee26e1d",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/left/left_finger4_link2.STL",
+      "size_bytes": 55484,
+      "sha256": "d51b96912a9e127abdf89e5673ecaad6db373817b3cc85bd6bbc077dcff3b374",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/left/left_finger4_link2.STL",
+      "source_sha256": "d51b96912a9e127abdf89e5673ecaad6db373817b3cc85bd6bbc077dcff3b374",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/left/left_finger4_link3.STL",
+      "size_bytes": 133184,
+      "sha256": "18d23d11f4b8735bbc0a790a3d4493eeb0389afdbdc44665f77e4c6d604c16fb",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/left/left_finger4_link3.STL",
+      "source_sha256": "18d23d11f4b8735bbc0a790a3d4493eeb0389afdbdc44665f77e4c6d604c16fb",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/left/left_finger4_link4.STL",
+      "size_bytes": 54884,
+      "sha256": "592c269cd9a47569084028096d3413289e68d3888cc756cb3d092674e137fdff",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/left/left_finger4_link4.STL",
+      "source_sha256": "592c269cd9a47569084028096d3413289e68d3888cc756cb3d092674e137fdff",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/left/left_finger4_tip_link.STL",
+      "size_bytes": 112784,
+      "sha256": "67995957f5082af59a3d8745f435adc44133446b1574b7cfacf07ed02ff7aa09",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/left/left_finger4_tip_link.STL",
+      "source_sha256": "67995957f5082af59a3d8745f435adc44133446b1574b7cfacf07ed02ff7aa09",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/left/left_finger5_link1.STL",
+      "size_bytes": 67584,
+      "sha256": "2ddd53a41d441fb1763585ddd031aaef1f30718f1afff3607c08a8065214d96b",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/left/left_finger5_link1.STL",
+      "source_sha256": "2ddd53a41d441fb1763585ddd031aaef1f30718f1afff3607c08a8065214d96b",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/left/left_finger5_link2.STL",
+      "size_bytes": 55484,
+      "sha256": "09f0d2e932c41f9aa678ff80d5f7a612e43f7d14b12ef38cd98bc330a11f5ed1",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/left/left_finger5_link2.STL",
+      "source_sha256": "09f0d2e932c41f9aa678ff80d5f7a612e43f7d14b12ef38cd98bc330a11f5ed1",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/left/left_finger5_link3.STL",
+      "size_bytes": 133184,
+      "sha256": "2550cb770eba8132cab3208c10b6891de17b05c051555dea79dbb9e8dac2b011",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/left/left_finger5_link3.STL",
+      "source_sha256": "2550cb770eba8132cab3208c10b6891de17b05c051555dea79dbb9e8dac2b011",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/left/left_finger5_link4.STL",
+      "size_bytes": 54884,
+      "sha256": "3f095a1ca1733b4769121a3be424ebfdc450a2c384623d079f9c159c4c8b0200",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/left/left_finger5_link4.STL",
+      "source_sha256": "3f095a1ca1733b4769121a3be424ebfdc450a2c384623d079f9c159c4c8b0200",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/left/left_finger5_tip_link.STL",
+      "size_bytes": 112784,
+      "sha256": "6955f23515b68a893b6e1c9de7067c4852224e1cc8413211a948ec4c09dbf5aa",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/left/left_finger5_tip_link.STL",
+      "source_sha256": "6955f23515b68a893b6e1c9de7067c4852224e1cc8413211a948ec4c09dbf5aa",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/left/left_palm_link.STL",
+      "size_bytes": 470084,
+      "sha256": "5a16d3510b49444857cc829a18202ce8bf62a129c20684190ccaedb545992298",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/left/left_palm_link.STL",
+      "source_sha256": "5a16d3510b49444857cc829a18202ce8bf62a129c20684190ccaedb545992298",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/right/right_finger1_link1.STL",
+      "size_bytes": 366584,
+      "sha256": "0e32302a46cd00d6cc1e7fb03cc483988c639271708c2300a9aecc9de537e42b",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/right/right_finger1_link1.STL",
+      "source_sha256": "0e32302a46cd00d6cc1e7fb03cc483988c639271708c2300a9aecc9de537e42b",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/right/right_finger1_link2.STL",
+      "size_bytes": 92684,
+      "sha256": "080015cce41de31954e53bbfca45f37f0439e2e689bca49e1910c70efc4f70b7",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/right/right_finger1_link2.STL",
+      "source_sha256": "080015cce41de31954e53bbfca45f37f0439e2e689bca49e1910c70efc4f70b7",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/right/right_finger1_link3.STL",
+      "size_bytes": 89184,
+      "sha256": "52eef283d29c617fe4457151685386324bddbccf1598b8a7fc675bb8f28dc85a",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/right/right_finger1_link3.STL",
+      "source_sha256": "52eef283d29c617fe4457151685386324bddbccf1598b8a7fc675bb8f28dc85a",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/right/right_finger1_link4.STL",
+      "size_bytes": 65984,
+      "sha256": "f0fb321c4abfd4ab7437caeb116f1935b94d1510fd921222eb49ba6c5a57f057",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/right/right_finger1_link4.STL",
+      "source_sha256": "f0fb321c4abfd4ab7437caeb116f1935b94d1510fd921222eb49ba6c5a57f057",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/right/right_finger1_tip_link.STL",
+      "size_bytes": 96084,
+      "sha256": "25929e0c28a5c65afe88dbccaa697664a2385f8ead02126731a7e1b956ec1dea",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/right/right_finger1_tip_link.STL",
+      "source_sha256": "25929e0c28a5c65afe88dbccaa697664a2385f8ead02126731a7e1b956ec1dea",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/right/right_finger2_link1.STL",
+      "size_bytes": 56184,
+      "sha256": "36e0471a0373a7634fc10911b33f3b30a5fe829f6526e656a911406cebf19731",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/right/right_finger2_link1.STL",
+      "source_sha256": "36e0471a0373a7634fc10911b33f3b30a5fe829f6526e656a911406cebf19731",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/right/right_finger2_link2.STL",
+      "size_bytes": 51984,
+      "sha256": "56bb1972b8cb1d63d48aa18283148ff6760e387dc64fe963b11209e07e243511",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/right/right_finger2_link2.STL",
+      "source_sha256": "56bb1972b8cb1d63d48aa18283148ff6760e387dc64fe963b11209e07e243511",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/right/right_finger2_link3.STL",
+      "size_bytes": 91284,
+      "sha256": "48d70e865e2b49139028511808ae3ad25c5cf06e36fe959c6c71b5263dfcbbde",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/right/right_finger2_link3.STL",
+      "source_sha256": "48d70e865e2b49139028511808ae3ad25c5cf06e36fe959c6c71b5263dfcbbde",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/right/right_finger2_link4.STL",
+      "size_bytes": 54884,
+      "sha256": "3eede2c8e1eb1301bc23b4b453fb7014ca5965611b44b115a7330bf33e4d922e",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/right/right_finger2_link4.STL",
+      "source_sha256": "3eede2c8e1eb1301bc23b4b453fb7014ca5965611b44b115a7330bf33e4d922e",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/right/right_finger2_tip_link.STL",
+      "size_bytes": 112784,
+      "sha256": "496039ce3f4f3fbe6bac466a01567797f741af95c6f11dc61626ec2de175900b",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/right/right_finger2_tip_link.STL",
+      "source_sha256": "496039ce3f4f3fbe6bac466a01567797f741af95c6f11dc61626ec2de175900b",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/right/right_finger3_link1.STL",
+      "size_bytes": 56184,
+      "sha256": "558fac18be219c0e6bb6224b82c711b3efe762b547818ea074eda93dc38bad07",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/right/right_finger3_link1.STL",
+      "source_sha256": "558fac18be219c0e6bb6224b82c711b3efe762b547818ea074eda93dc38bad07",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/right/right_finger3_link2.STL",
+      "size_bytes": 51984,
+      "sha256": "338db71e2c1ec63fba860d5d2af52bcb1daff72349b0e03a45f82ae63539bd43",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/right/right_finger3_link2.STL",
+      "source_sha256": "338db71e2c1ec63fba860d5d2af52bcb1daff72349b0e03a45f82ae63539bd43",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/right/right_finger3_link3.STL",
+      "size_bytes": 91284,
+      "sha256": "3af337085d5f6430a471462c18b9132f1447eb8c0f3c68a8b1e69318ff8c3db8",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/right/right_finger3_link3.STL",
+      "source_sha256": "3af337085d5f6430a471462c18b9132f1447eb8c0f3c68a8b1e69318ff8c3db8",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/right/right_finger3_link4.STL",
+      "size_bytes": 54884,
+      "sha256": "3b8efa21bafcae21119f243decf924dac51cc55181ed540e69ce6b85ecf03790",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/right/right_finger3_link4.STL",
+      "source_sha256": "3b8efa21bafcae21119f243decf924dac51cc55181ed540e69ce6b85ecf03790",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/right/right_finger3_tip_link.STL",
+      "size_bytes": 112784,
+      "sha256": "7a99f65a6a473899913d4273e61319e3724fbf81ac8532969ed5c2ff1c1bde54",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/right/right_finger3_tip_link.STL",
+      "source_sha256": "7a99f65a6a473899913d4273e61319e3724fbf81ac8532969ed5c2ff1c1bde54",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/right/right_finger4_link1.STL",
+      "size_bytes": 56184,
+      "sha256": "508321fefaeae1ae0567f89acd2492fac27cc468a2f562d895afcff192b0d00c",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/right/right_finger4_link1.STL",
+      "source_sha256": "508321fefaeae1ae0567f89acd2492fac27cc468a2f562d895afcff192b0d00c",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/right/right_finger4_link2.STL",
+      "size_bytes": 51984,
+      "sha256": "e0b28769389c33af6af73c6dbf506be126570fa6ca7cbaf08f85a51005c48cde",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/right/right_finger4_link2.STL",
+      "source_sha256": "e0b28769389c33af6af73c6dbf506be126570fa6ca7cbaf08f85a51005c48cde",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/right/right_finger4_link3.STL",
+      "size_bytes": 91284,
+      "sha256": "b01668bab452260954faf8cbff94fb59c55ccb3e490ff6eb4b73e81e550c787f",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/right/right_finger4_link3.STL",
+      "source_sha256": "b01668bab452260954faf8cbff94fb59c55ccb3e490ff6eb4b73e81e550c787f",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/right/right_finger4_link4.STL",
+      "size_bytes": 54884,
+      "sha256": "d673bf02761f722728eb1ee0e7cc79ee6afba7693c78f623c3a4a89d5a905453",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/right/right_finger4_link4.STL",
+      "source_sha256": "d673bf02761f722728eb1ee0e7cc79ee6afba7693c78f623c3a4a89d5a905453",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/right/right_finger4_tip_link.STL",
+      "size_bytes": 113484,
+      "sha256": "e8b1fbee8e019afe490e820b1cba5e02c5124bb4a09aa73896bd46db6586dfde",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/right/right_finger4_tip_link.STL",
+      "source_sha256": "e8b1fbee8e019afe490e820b1cba5e02c5124bb4a09aa73896bd46db6586dfde",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/right/right_finger5_link1.STL",
+      "size_bytes": 56184,
+      "sha256": "85ce22b8285a7d85e4c866151c972cde0736d4f618f35015b0b96fe39e367e49",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/right/right_finger5_link1.STL",
+      "source_sha256": "85ce22b8285a7d85e4c866151c972cde0736d4f618f35015b0b96fe39e367e49",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/right/right_finger5_link2.STL",
+      "size_bytes": 51984,
+      "sha256": "9245362396a184e63af8d2707dc85a3250f1d7db4eeb079d5b3ee9b432939dd6",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/right/right_finger5_link2.STL",
+      "source_sha256": "9245362396a184e63af8d2707dc85a3250f1d7db4eeb079d5b3ee9b432939dd6",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/right/right_finger5_link3.STL",
+      "size_bytes": 91284,
+      "sha256": "1083dcec6df545d60c3f14af1113613ca89cc8964692dd624baa750491915f40",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/right/right_finger5_link3.STL",
+      "source_sha256": "1083dcec6df545d60c3f14af1113613ca89cc8964692dd624baa750491915f40",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/right/right_finger5_link4.STL",
+      "size_bytes": 54884,
+      "sha256": "6342d4562a8bfaef740850c02dc5418ade11dcbe04736b957d93522995080f35",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/right/right_finger5_link4.STL",
+      "source_sha256": "6342d4562a8bfaef740850c02dc5418ade11dcbe04736b957d93522995080f35",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/right/right_finger5_tip_link.STL",
+      "size_bytes": 112784,
+      "sha256": "ebbf48ca7ba3bca5f329f95277ae392d0c1a09615eda23f1bf646c5112a38cee",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/right/right_finger5_tip_link.STL",
+      "source_sha256": "ebbf48ca7ba3bca5f329f95277ae392d0c1a09615eda23f1bf646c5112a38cee",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/meshes/right/right_palm_link.STL",
+      "size_bytes": 456184,
+      "sha256": "1ba4495e3b7adc707d50150a8625a0ed3731fa42ab6d40e62ae7437da103ce5e",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/meshes/right/right_palm_link.STL",
+      "source_sha256": "1ba4495e3b7adc707d50150a8625a0ed3731fa42ab6d40e62ae7437da103ce5e",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/right.xml",
+      "size_bytes": 20136,
+      "sha256": "2b64fcb11b5a3a3105573f0200f4fc19eacea88765196782416f4ac21f41c6b1",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/right.xml",
+      "source_sha256": "2b64fcb11b5a3a3105573f0200f4fc19eacea88765196782416f4ac21f41c6b1",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/urdf/left.urdf",
+      "size_bytes": 30894,
+      "sha256": "da85a622103b1d2d332a3ae11f0d11d732d518d70008827ff0464d5e8f9d2a00",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/urdf/left.urdf",
+      "source_sha256": "da85a622103b1d2d332a3ae11f0d11d732d518d70008827ff0464d5e8f9d2a00",
+      "modifications": null
+    },
+    {
+      "path": "robots/tianji/wuji_hand_sim_infra/urdf/right.urdf",
+      "size_bytes": 28850,
+      "sha256": "d6e497fa7a88ac910a21163df9baac3258a80f093ada5176c696d185d761c9be",
+      "source_repository": "sim_infra",
+      "source_path": "assets/robots/wuji_hand/urdf/right.urdf",
+      "source_sha256": "d6e497fa7a88ac910a21163df9baac3258a80f093ada5176c696d185d761c9be",
+      "modifications": null
+    }
+  ]
+}

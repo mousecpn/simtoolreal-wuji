@@ -1,0 +1,143 @@
+<mujoco model="marvin_robot_696">
+  <compiler angle="radian"/>
+
+  <!--
+    Auto-converted from tianji_marvin_CCS_real_limit.urdf using MuJoCo's URDF
+    loader, then normalized for repo-relative mesh paths.
+
+    Position limits are encoded in each joint's range.
+    Velocity limits from the URDF were uniformly 3.14 rad/s and are not encoded
+    directly in MJCF joints.
+    Documented acceleration limits from the URDF source:
+      joint1=7.853982, joint2=7.853982, joint3=15.707963,
+      joint4=15.707963, joint5=15.707963, joint6=15.707963,
+      joint7=15.707963 rad/s^2
+  -->
+
+  <asset>
+    <mesh name="Base_L" content_type="model/stl" file="meshes_sim_infra/left_arm/Base_L.STL"/>
+    <mesh name="Link1_L" content_type="model/stl" file="meshes_sim_infra/left_arm/Link1_L.STL"/>
+    <mesh name="Link2_L" content_type="model/stl" file="meshes_sim_infra/left_arm/Link2_L.STL"/>
+    <mesh name="Link3_L" content_type="model/stl" file="meshes_sim_infra/left_arm/Link3_L.STL"/>
+    <mesh name="Link4_L" content_type="model/stl" file="meshes_sim_infra/left_arm/Link4_L.STL"/>
+    <mesh name="Link5_L" content_type="model/stl" file="meshes_sim_infra/left_arm/Link5_L.STL"/>
+    <mesh name="Link6_L" content_type="model/stl" file="meshes_sim_infra/left_arm/Link6_L.STL"/>
+    <mesh name="Link7_L" content_type="model/stl" file="meshes_sim_infra/left_arm/Link7_L.STL"/>
+    <mesh name="Base_R" content_type="model/stl" file="meshes_sim_infra/right_arm/Base_R.STL"/>
+    <mesh name="Link1_R" content_type="model/stl" file="meshes_sim_infra/right_arm/Link1_R.STL"/>
+    <mesh name="Link2_R" content_type="model/stl" file="meshes_sim_infra/right_arm/Link2_R.STL"/>
+    <mesh name="Link3_R" content_type="model/stl" file="meshes_sim_infra/right_arm/Link3_R.STL"/>
+    <mesh name="Link4_R" content_type="model/stl" file="meshes_sim_infra/right_arm/Link4_R.STL"/>
+    <mesh name="Link5_R" content_type="model/stl" file="meshes_sim_infra/right_arm/Link5_R.STL"/>
+    <mesh name="Link6_R" content_type="model/stl" file="meshes_sim_infra/right_arm/Link6_R.STL"/>
+    <mesh name="Link7_R" content_type="model/stl" file="meshes_sim_infra/right_arm/Link7_R.STL"/>
+    <mesh name="BASE_696" content_type="model/stl" file="meshes_sim_infra/SRS/BASE_696.stl" scale="0.001 0.001 0.001"/>
+  </asset>
+
+  <worldbody>
+    <site name="base_frame" pos="0 0 0" size="0.002" rgba="1 0 0 1"/>
+    <geom type="mesh" rgba="1 1 1 1" mesh="BASE_696"/>
+    <body name="left_base_link" pos="0 0.04 0.14" quat="0.707105 -0.707108 0 0">
+      <geom type="mesh" rgba="0.8 0.8 0.8 1" mesh="Base_L"/>
+      <body name="left_link1">
+        <inertial pos="1.875e-05 0.006003 0.1438" mass="2.0926" diaginertia="0.01 0.01 0.01"/>
+        <joint name="left_joint1" pos="0 0 0" axis="0 0 1" range="-2.96706 2.96706" actuatorfrcrange="-108 108"/>
+        <geom pos="0 0 0.1745" quat="1 0 0 0" type="mesh" rgba="0.8 0.8 0.8 1" mesh="Link1_L"/>
+        <body name="left_link2" pos="0 0 0.1745">
+          <inertial pos="-7.03e-06 0.05542 0.010995" mass="1.9432" diaginertia="0.01 0.01 0.01"/>
+          <joint name="left_joint2" pos="0 0 0" axis="0 -1 0" range="-2.0944 2.0944" actuatorfrcrange="-108 108"/>
+          <geom quat="0.707105 0.707108 0 0" type="mesh" rgba="0.8 0.8 0.8 1" mesh="Link2_L"/>
+          <body name="left_link3">
+            <inertial pos="0.0087411 0.0019043 0.23487" mass="1.6913" diaginertia="0.01 0.01 0.01"/>
+            <joint name="left_joint3" pos="0 0 0" axis="0 0 1" range="-2.96706 2.96706" actuatorfrcrange="-66 66"/>
+            <geom pos="0 0 0.287" quat="1 0 0 0" type="mesh" rgba="0.8 0.8 0.8 1" mesh="Link3_L"/>
+            <body name="left_link4" pos="0.018 0 0.287">
+              <inertial pos="-0.0086935 0.045984 0.011135" mass="1.5332" diaginertia="0.01 0.01 0.01"/>
+              <joint name="left_joint4" pos="0 0 0" axis="0 1 0" range="-2.53073 1.0472" actuatorfrcrange="-66 66"/>
+              <geom quat="9.38184e-07 -9.38187e-07 -0.707108 0.707105" type="mesh" rgba="0.8 0.8 0.8 1" mesh="Link4_L"/>
+              <body name="left_link5" pos="-0.018 0 0.314">
+                <inertial pos="-0.00036467 0.0001479 0.19902" mass="2.0095" diaginertia="0.01 0.01 0.01"/>
+                <joint name="left_joint5" pos="0 0 0" axis="0 0 1" range="-2.96706 2.96706" actuatorfrcrange="-18 18"/>
+                <geom type="mesh" rgba="0.8 0.8 0.8 1" mesh="Link5_L"/>
+                <body name="left_link6">
+                  <inertial pos="-0.004911 0.00027206 -8.14e-05" mass="0.67002" diaginertia="0.01 0.01 0.01"/>
+                  <joint name="left_joint6" pos="0 0 0" axis="0 -1 0" range="-1.0472 1.0472" actuatorfrcrange="-18 18"/>
+                  <geom quat="0.499998 0.5 -0.5 0.500002" type="mesh" rgba="0.8 0.8 0.8 1" mesh="Link6_L"/>
+                  <body name="left_link7">
+                    <inertial pos="0.044988 -4.226e-05 0.0055581" mass="0.31658" diaginertia="0.01 0.01 0.01"/>
+                    <joint name="left_joint7" pos="0 0 0" axis="1 0 0" range="-1.5708 1.5708" actuatorfrcrange="-18 18"/>
+                    <site name="left_wrist_frame" pos="0 0 0.088" size="0.002" rgba="0 1 0 1"/>
+                    <geom quat="0.499998 -0.5 0.500002 -0.5" type="mesh" rgba="0.8 0.8 0.8 1" mesh="Link7_L"/>
+                  </body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+    <body name="right_base_link" pos="0 -0.04 0.14" quat="0.707105 0.707108 0 0">
+      <geom type="mesh" rgba="0.8 0.8 0.8 1" mesh="Base_R"/>
+      <body name="right_link1">
+        <inertial pos="1.875e-05 0.006003 0.1438" mass="2.0926" diaginertia="0.01 0.01 0.01"/>
+        <joint name="right_joint1" pos="0 0 0" axis="0 0 1" range="-2.96706 2.96706" actuatorfrcrange="-108 108"/>
+        <geom pos="0 0 0.1745" quat="1 0 0 0" type="mesh" rgba="0.8 0.8 0.8 1" mesh="Link1_R"/>
+        <body name="right_link2" pos="0 0 0.1745">
+          <inertial pos="-7.03e-06 0.05542 0.010995" mass="1.9432" diaginertia="0.01 0.01 0.01"/>
+          <joint name="right_joint2" pos="0 0 0" axis="0 -1 0" range="-2.0944 2.0944" actuatorfrcrange="-108 108"/>
+          <geom quat="0.707105 0.707108 0 0" type="mesh" rgba="0.8 0.8 0.8 1" mesh="Link2_R"/>
+          <body name="right_link3">
+            <inertial pos="0.0087411 0.0019043 0.23487" mass="1.6913" diaginertia="0.01 0.01 0.01"/>
+            <joint name="right_joint3" pos="0 0 0" axis="0 0 1" range="-2.96706 2.96706" actuatorfrcrange="-66 66"/>
+            <geom pos="0 0 0.287" quat="1 0 0 0" type="mesh" rgba="0.8 0.8 0.8 1" mesh="Link3_R"/>
+            <body name="right_link4" pos="0.018 0 0.287">
+              <inertial pos="-0.0086935 0.045984 0.011135" mass="1.5332" diaginertia="0.01 0.01 0.01"/>
+              <joint name="right_joint4" pos="0 0 0" axis="0 1 0" range="-2.53073 1.0472" actuatorfrcrange="-66 66"/>
+              <geom quat="9.38184e-07 -9.38187e-07 -0.707108 0.707105" type="mesh" rgba="0.8 0.8 0.8 1" mesh="Link4_R"/>
+              <body name="right_link5" pos="-0.018 0 0.314">
+                <inertial pos="-0.00036467 0.0001479 0.19902" mass="2.0095" diaginertia="0.01 0.01 0.01"/>
+                <joint name="right_joint5" pos="0 0 0" axis="0 0 1" range="-2.96706 2.96706" actuatorfrcrange="-18 18"/>
+                <geom type="mesh" rgba="0.8 0.8 0.8 1" mesh="Link5_R"/>
+                <body name="right_link6">
+                  <inertial pos="-0.004911 0.00027206 -8.14e-05" mass="0.67002" diaginertia="0.01 0.01 0.01"/>
+                  <joint name="right_joint6" pos="0 0 0" axis="0 -1 0" range="-1.0472 1.0472" actuatorfrcrange="-18 18"/>
+                  <geom quat="0.499998 0.5 -0.5 0.500002" type="mesh" rgba="0.8 0.8 0.8 1" mesh="Link6_R"/>
+                  <body name="right_link7">
+                    <inertial pos="0.044988 -4.226e-05 0.0055581" mass="0.31658" diaginertia="0.01 0.01 0.01"/>
+                    <joint name="right_joint7" pos="0 0 0" axis="1 0 0" range="-1.5708 1.5708" actuatorfrcrange="-18 18"/>
+                    <site name="right_wrist_frame" pos="0 0 0.088" size="0.002" rgba="0 0 1 1"/>
+                    <geom quat="0.499998 -0.5 0.500002 -0.5" type="mesh" rgba="0.8 0.8 0.8 1" mesh="Link7_R"/>
+                  </body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <contact>
+    <!-- Screenshot-driven exclusions -->
+    <exclude body1="left_base_link" body2="left_link1"/>
+    <exclude body1="right_base_link" body2="right_link1"/>
+    <exclude body1="left_link5" body2="left_link7"/>
+    <exclude body1="right_link5" body2="right_link7"/>
+
+    <!-- Left arm adjacent-body exclusions -->
+    <!-- <exclude body1="left_link1" body2="left_link2"/>
+    <exclude body1="left_link2" body2="left_link3"/>
+    <exclude body1="left_link3" body2="left_link4"/>
+    <exclude body1="left_link4" body2="left_link5"/>
+    <exclude body1="left_link5" body2="left_link6"/>
+    <exclude body1="left_link6" body2="left_link7"/> -->
+
+    <!-- Right arm adjacent-body exclusions -->
+    <!-- <exclude body1="right_link1" body2="right_link2"/>
+    <exclude body1="right_link2" body2="right_link3"/>
+    <exclude body1="right_link3" body2="right_link4"/>
+    <exclude body1="right_link4" body2="right_link5"/>
+    <exclude body1="right_link5" body2="right_link6"/>
+    <exclude body1="right_link6" body2="right_link7"/> -->
+  </contact>
+</mujoco>

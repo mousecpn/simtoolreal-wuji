@@ -23,6 +23,7 @@ PALM_LINK = "right_wuji_palm"
 FINGERTIP_LINKS = tuple(f"right_finger{i}_tip_link" for i in range(1, 6))
 SOURCE_RELATIVE = Path("robots/tianji/tianji_marvin_CCS_real_limit_wuji_sim_infra.xml")
 REPO_ROOT = Path(__file__).resolve().parents[3]
+BUNDLED_ASSET_ROOT = REPO_ROOT / "assets/robots/tianji_wuji"
 
 
 def _numbers(value, default):
@@ -64,10 +65,12 @@ def _origin(parent, source):
 
 
 def find_source(dextele_root=None):
-    root = Path(dextele_root or os.environ.get("DEXTELE_ROOT", REPO_ROOT.parent / "DexTele")).expanduser()
+    # A normal checkout includes the complete source assets. External roots
+    # remain an explicit override for development, never an implicit dependency.
+    root = Path(dextele_root or os.environ.get("DEXTELE_ROOT") or BUNDLED_ASSET_ROOT).expanduser()
     source = root / SOURCE_RELATIVE
     if not source.is_file():
-        raise FileNotFoundError(f"Tianji/Wuji source not found: {source}. Set env.robot.dextele_root or DEXTELE_ROOT to the DexTele checkout containing {SOURCE_RELATIVE}.")
+        raise FileNotFoundError(f"Tianji/Wuji source not found: {source}. Restore assets/robots/tianji_wuji from Git, or set env.robot.dextele_root or DEXTELE_ROOT to an external checkout containing {SOURCE_RELATIVE}.")
     return source
 
 
@@ -104,7 +107,7 @@ def prepare_asset(dextele_root=None, output_dir=None):
         # MJCF resolves '..' lexically before following meshdir symlinks.
         resolved = Path(os.path.normpath(meshdir / mesh.get("file"))).resolve()
         if not resolved.is_file():
-            raise FileNotFoundError(f"Missing DexTele mesh {resolved} referenced by {source}. Restore DexTele's meshes_sim_infra and wuji_hand_sim_infra symlinks and the sibling sim_infra asset checkout.")
+            raise FileNotFoundError(f"Missing robot mesh {resolved} referenced by {source}. Restore the complete assets/robots/tianji_wuji directory, or repair the explicitly selected external asset checkout.")
         filename = f"{mesh.get('name')}{resolved.suffix}"
         shutil.copy2(resolved, mesh_target / filename)
         mesh_sources[str(resolved)] = hashlib.sha256(resolved.read_bytes()).hexdigest()

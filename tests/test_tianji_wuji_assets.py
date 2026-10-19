@@ -1,9 +1,13 @@
 """Run without importing Isaac Sim: python -m unittest discover -s tests."""
 import importlib.util
+import hashlib
 import json
+import os
 from pathlib import Path
+import shutil
 import tempfile
 import unittest
+from unittest.mock import patch
 import xml.etree.ElementTree as ET
 
 
@@ -14,18 +18,93 @@ SPEC.loader.exec_module(assets)
 
 
 class AssetTests(unittest.TestCase):
+    def test_default_source_is_bundled(self):
+        with patch.dict(os.environ, {"DEXTELE_ROOT": ""}):
+            self.assertEqual(assets.find_source(), assets.BUNDLED_ASSET_ROOT / assets.SOURCE_RELATIVE)
+            self.assertTrue(assets.find_source().is_file())
+
+    def test_bundle_inventory_and_hashes(self):
+        root = assets.BUNDLED_ASSET_ROOT
+        manifest = json.loads((root / "MANIFEST.json").read_text())
+        inventory = {entry["path"]: entry for entry in manifest["files"]}
+        self.assertTrue(inventory)
+        actual = set()
+        for path in root.rglob("*"):
+            self.assertFalse(path.is_symlink(), str(path))
+            if path.is_file() and path.name not in {"README.md", "MANIFEST.json"}:
+                actual.add(path.relative_to(root).as_posix())
+        self.assertEqual(actual, set(inventory))
+        for relative, entry in inventory.items():
+            with self.subTest(path=relative):
+                path = root / relative
+                self.assertTrue(path.resolve().is_relative_to(root.resolve()))
+                data = path.read_bytes()
+                self.assertEqual(len(data), entry["size_bytes"])
+                self.assertEqual(hashlib.sha256(data).hexdigest(), entry["sha256"])
+
+    def test_isolated_checkout_converts_without_external_assets(self):
+        """Only a copied loader and bundled payload must suffice in a new root."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            module = root / "isaacsimenvs/tasks/tianji_wuji/assets.py"
+            module.parent.mkdir(parents=True)
+            shutil.copy2(MODULE, module)
+            bundle = root / "assets/robots/tianji_wuji"
+            shutil.copytree(assets.BUNDLED_ASSET_ROOT, bundle)
+            spec = importlib.util.spec_from_file_location("isolated_tianji_wuji_assets", module)
+            isolated = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(isolated)
+            with patch.dict(os.environ, {"DEXTELE_ROOT": ""}):
+                self.assertEqual(isolated.find_source(), bundle / assets.SOURCE_RELATIVE)
+                urdf = isolated.prepare_asset()
+            manifest = json.loads((urdf.parent / "manifest.json").read_text())
+            source_paths = [manifest["source"], manifest["palm_inertia_source"],
+                            *manifest["mesh_sources_sha256"]]
+            self.assertTrue(manifest["mesh_sources_sha256"])
+            for source in source_paths:
+                self.assertTrue(Path(source).resolve().is_relative_to(bundle), source)
+            # The generated robot must remain loadable even after deleting its source.
+            shutil.rmtree(bundle)
+            for mesh in ET.parse(urdf).findall(".//mesh"):
+                relative = Path(mesh.get("filename"))
+                self.assertFalse(relative.is_absolute())
+                self.assertTrue((urdf.parent / relative).is_file())
+
+    def test_all_bundled_model_references_are_internal(self):
+        """Validate both hands and every supplied model, beyond the task's right chain."""
+        root = assets.BUNDLED_ASSET_ROOT.resolve()
+        references = 0
+        for source in root.rglob("*"):
+            if source.suffix.lower() not in {".xml", ".urdf"}:
+                continue
+            model = ET.parse(source).getroot()
+            compiler = model.find("compiler")
+            meshdir = compiler.get("meshdir", "") if compiler is not None else ""
+            texturedir = compiler.get("texturedir", "") if compiler is not None else ""
+            for element in model.iter():
+                reference = element.get("filename") or element.get("file")
+                if not reference:
+                    continue
+                with self.subTest(model=source.relative_to(root), reference=reference):
+                    self.assertFalse(Path(reference).is_absolute())
+                    self.assertNotIn("://", reference)
+                    prefix = meshdir if element.tag == "mesh" and element.get("file") else ""
+                    if element.tag == "texture":
+                        prefix = texturedir
+                    dependency = (source.parent / prefix / reference).resolve()
+                    self.assertTrue(dependency.is_relative_to(root), str(dependency))
+                    self.assertTrue(dependency.is_file(), str(dependency))
+                    references += 1
+        self.assertGreater(references, 600)
+
     def test_missing_source_is_actionable(self):
         with tempfile.TemporaryDirectory() as directory:
             with self.assertRaisesRegex(FileNotFoundError, "DEXTELE_ROOT"):
                 assets.prepare_asset(directory, Path(directory) / "output")
 
     def test_single_right_chain_and_portable_meshes(self):
-        try:
-            assets.find_source()
-        except FileNotFoundError as exc:
-            self.skipTest(str(exc))
         with tempfile.TemporaryDirectory() as directory:
-            path = assets.prepare_asset(output_dir=directory)
+            path = assets.prepare_asset(assets.BUNDLED_ASSET_ROOT, output_dir=directory)
             robot = ET.parse(path).getroot()
             names = [j.get("name") for j in robot.findall("joint") if j.get("type") == "revolute"]
             self.assertEqual(tuple(names), assets.DOF_NAMES)
@@ -50,13 +129,10 @@ class AssetTests(unittest.TestCase):
             from yourdfpy import URDF
         except ImportError:
             self.skipTest("Independent FK check requires numpy, scipy and yourdfpy")
-        try:
-            source = assets.find_source()
-        except FileNotFoundError as exc:
-            self.skipTest(str(exc))
+        source = assets.find_source(assets.BUNDLED_ASSET_ROOT)
         base = ET.parse(source).find("worldbody/body[@name='base']")
         with tempfile.TemporaryDirectory() as directory:
-            robot = URDF.load(assets.prepare_asset(output_dir=directory), load_meshes=False)
+            robot = URDF.load(assets.prepare_asset(assets.BUNDLED_ASSET_ROOT, output_dir=directory), load_meshes=False)
             rng = np.random.default_rng(42)
             for _ in range(8):
                 q = {}

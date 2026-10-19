@@ -28,7 +28,7 @@ class TianjiWujiEnvCfg(SimToolRealEnvCfg):
     observation_space: int = 134
     state_space: int = 156
     robot: TianjiWujiRobotCfg = TianjiWujiRobotCfg()
-    # Generated from DexTele at launch; never loads the original robot URDF.
+    # Generated from bundled Tianji/Wuji sources at launch.
     assets: AssetsCfg = AssetsCfg(robot_urdf="", num_assets_per_type=10)
     scene: InteractiveSceneCfg = InteractiveSceneCfg(
         num_envs=1024, env_spacing=2.0,

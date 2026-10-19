@@ -10,24 +10,18 @@ Gym ID 为 `Isaacsimenvs-SimToolReal-TianjiWuji-Direct-v0`。原有 `Isaacsimenv
 
 ```bash
 source .envrc
-export DEXTELE_ROOT=/home/pinhao/DexTele
 ```
 
-`DEXTELE_ROOT` 应指向实际的 DexTele checkout。也可在训练命令中覆盖 `env.robot.dextele_root=/absolute/path/to/DexTele`。未指定时，默认查找当前仓库的同级 `DexTele/`。
+机器人源资产已随 Git 收录在 `assets/robots/tianji_wuji/`，默认从该目录加载，**不需要同级 DexTele、sim_infra 或外部软链接**。包含 Tianji 双臂 meshes、原生 URDF、DexTele 的 Tianji/Wuji MJCF 场景，以及 Wuji 左右手的原生 MJCF、URDF 和 meshes；训练仍只使用右臂和右手。完整来源、范围和逐文件 SHA-256 见该目录的 `README.md` 与 `MANIFEST.json`。
 
-资产来源为：
+环境启动时从仓库内的 canonical MJCF 生成单右臂单右手 URDF，并复制 meshes 到本次运行的临时资产目录，再转换为 USD。生成缓存不纳入 Git；Isaac Sim / Isaac Lab 和 Python 依赖仍需单独安装。
 
-- `robots/tianji/tianji_marvin_CCS_real_limit_wuji_sim_infra.xml`：关节层级、变换、真实限位和碰撞信息。
-- `robots/tianji/meshes_sim_infra`：Tianji meshes，通常链接到同级 `sim_infra/assets/robots/tianji_marvin_ccs_696/meshes`。
-- `robots/tianji/wuji_hand_sim_infra`：Wuji meshes 和 `urdf/right.urdf`，通常链接到同级 `sim_infra/assets/robots/wuji_hand`；原生 URDF 提供 palm 惯量。
-
-必须同时保留 XML、mesh 文件和有效的 mesh symlink。只有 DexTele 的代码 checkout 而缺失 `sim_infra` 资产时，转换器会报出缺失路径。环境启动时从源 MJCF 生成仅包含右臂和右手的 URDF，并复制 mesh 到本次运行的临时资产目录，再转换为 USD；源资产不会被修改。
+如需开发时使用外部版本，可显式设置 `DEXTELE_ROOT=/absolute/path/to/DexTele`，或在训练命令中设置 `env.robot.dextele_root=/absolute/path/to/DexTele`。该外部 checkout 必须同时提供 MJCF、meshes 和原生 Wuji `urdf/right.urdf`；取消覆盖后恢复使用仓库内资产。
 
 可先独立检查资产转换，无需启动 Isaac Sim：
 
 ```bash
 .venv_isaacsim/bin/python isaacsimenvs/tasks/tianji_wuji/assets.py \
-  --dextele-root "$DEXTELE_ROOT" \
   --output-dir /tmp/tianji_wuji_asset_check
 ```
 
@@ -99,7 +93,8 @@ source .envrc
 
 ## 已完成的验证
 
-- CPU 测试 7 项通过，包括 8 组随机有效姿态的独立 FK 对照。
+- CPU 测试 11 项通过，包括完整资产清单/hash、647 处包内引用、隔离目录转换与 8 组随机有效姿态的独立 FK 对照。
+- 使用默认仓库内资产，独立 checkout 通过 2 环境、40 步随机动作、局部 reset、超时和目标重采样检查。
 - RTX 3060 上，2 个并行环境通过 600 步随机动作、臂/手实际运动响应、局部 reset、超时自动 reset、成功后目标重采样检查。
 - PPO（16 环境）和 SAPG（24 环境、每块 4 环境、六块）均完成 2 个 epoch，保存 checkpoint；权重和优化器状态张量均为有限数值。
 - 原 Kuka + Sharpa 环境通过 2 环境、10 步 smoke 回归，仍使用 29 维动作与 140/162 维观测。其环境实现、训练入口、PPO/SAPG 配置均未修改。
