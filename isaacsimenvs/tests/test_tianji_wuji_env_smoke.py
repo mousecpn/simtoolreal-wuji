@@ -75,6 +75,21 @@ def main():
         assert [DOF_NAMES[i] for i in inner._perm_canon_to_lab.tolist()] == names
         assert inner.cfg.action_space == 27
         assert inner.single_action_space.shape == (27,)
+        # Verify effective imported limits and actuator gains, not only config.
+        limits = inner.robot.data.joint_pos_limits[0]
+        for finger in range(2, 6):
+            joint_id = names.index(f"right_finger{finger}_joint2")
+            torch.testing.assert_close(limits[joint_id], torch.tensor(
+                [-0.03491, 0.03491], device=inner.device))
+        for joint_names, expected, field in (
+            (ARM_JOINT_NAMES, cfg.robot.arm_stiffness, "joint_stiffness"),
+            (HAND_JOINT_NAMES, cfg.robot.hand_stiffness, "joint_stiffness"),
+        ):
+            joint_ids = [names.index(name) for name in joint_names]
+            torch.testing.assert_close(getattr(inner.robot.data, field)[0, joint_ids],
+                torch.tensor(expected, device=inner.device))
+        table_top = inner.table.data.root_pos_w[:, 2] - inner.scene.env_origins[:, 2] + 0.15
+        assert ((table_top >= 0.63 - 1e-6) & (table_top <= 0.65 + 1e-6)).all()
         for suffix in ("Object", "GoalViz", "Robot"):
             assert len(find_matching_prim_paths(f"/World/envs/env_.*/{suffix}")) == args.num_envs
         finite_observations(obs)
@@ -131,6 +146,14 @@ def main():
         # hook without a physics tick moving the object away from that pose.
         env.reset()
         object_pose = inner.object.data.root_state_w[0:1, :7].clone()
+        # A break in goal proximity must discard the preceding nine steps.
+        far_pose = object_pose.clone()
+        far_pose[:, 0] += 0.5
+        inner.goal_viz.write_root_pose_to_sim(far_pose, env_ids=selected)
+        inner._near_goal_steps.zero_()
+        inner._near_goal_steps[0] = cfg.termination.success_steps - 1
+        inner._get_dones()
+        assert not inner._is_success[0] and inner._near_goal_steps[0] == 0
         inner.goal_viz.write_root_pose_to_sim(object_pose, env_ids=selected)
         inner._near_goal_steps.zero_()
         inner._near_goal_steps[0] = cfg.termination.success_steps - 1
@@ -147,7 +170,8 @@ def main():
         torch.testing.assert_close(inner.goal_viz.data.root_state_w[1:, :7], untouched_goal, rtol=0, atol=0)
         finite_observations(inner._get_observations())
         print(f"[tianji-wuji smoke] PASS: {args.num_envs} clones, 27 joints/actions, "
-              f"134/156 observations, {args.steps} random steps, subset reset, timeout and goal success")
+              f"134/156 observations, {args.steps} random steps, subset reset, timeout and goal success",
+              flush=True)
     except BaseException:
         # Kit's fast shutdown may bypass Python's uncaught-exception printer.
         import traceback

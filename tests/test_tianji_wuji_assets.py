@@ -121,6 +121,30 @@ class AssetTests(unittest.TestCase):
             self.assertTrue(any(set(pair) == {"right_wuji_palm", "right_finger2_link2"}
                                 for pair in manifest["contact_exclusions"]))
 
+    def test_dextele_abduction_limits_only_change_four_generated_joints(self):
+        source = assets.find_source(assets.BUNDLED_ASSET_ROOT)
+        source_bytes = source.read_bytes()
+        original = {
+            joint.get("name"): tuple(map(float, joint.get("range").split()))
+            for joint in ET.parse(source).findall(".//joint[@range]")
+        }
+        restricted = {f"right_finger{finger}_joint2" for finger in range(2, 6)}
+        with tempfile.TemporaryDirectory() as directory:
+            path = assets.prepare_asset(output_dir=directory, restrict_abduction=True)
+            manifest = json.loads((path.parent / "manifest.json").read_text())
+            self.assertTrue(manifest["restrict_abduction"])
+            manifest_limits = {joint["name"]: (joint["lower"], joint["upper"])
+                               for joint in manifest["joints"]}
+            for joint in ET.parse(path).findall("joint[@type='revolute']"):
+                name = joint.get("name")
+                limit = joint.find("limit")
+                actual = (float(limit.get("lower")), float(limit.get("upper")))
+                expected = (-0.03491, 0.03491) if name in restricted else original[name]
+                with self.subTest(joint=name):
+                    self.assertEqual(actual, expected)
+                    self.assertEqual(manifest_limits[name], expected)
+        self.assertEqual(source.read_bytes(), source_bytes)
+
     def test_independent_source_and_urdf_fk(self):
         """Catch frame/quat conversion mistakes over the whole articulated tree."""
         try:

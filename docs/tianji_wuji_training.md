@@ -20,6 +20,30 @@ Gym ID 为 `Isaacsimenvs-SimToolReal-TianjiWuji-Direct-v0`。原有 `Isaacsimenv
 
 双手桌面沿左右工作区方向（Y）加宽至原来的 3 倍，桌面为 0.475 × 1.2 m，桌高不变。双手工具默认分别在桌面 y = +0.28 m 和 -0.28 m 区域内采样，XY 噪声为 ±0.035 m；每个工具有独立目标，两个目标配对重采样。可通过 `env.tools.object_centers_xy` 调整两个工具的工作区域。单手的桌面、工具数量、初始化和训练设置保持原样。双手不接受仅描述单物体的 `fixed_start_pose`、`fixed_goal_pose` 或 `fixed_trajectory_file` 配置。
 
+## 单手默认参数与 DexTele 对齐
+
+单臂任务以下默认值与 DexTele 的 procedural SimToolReal 对齐：
+
+| 参数 | 单手默认值 |
+|---|---|
+| 臂 stiffness | `[600,600,500,400,200,200,200]` |
+| 手 stiffness | Wuji Hand 1 `right_mjlab.xml` 的20个逐关节 kp，约0.1803～0.6859；按 finger1～5、joint1～4 排列 |
+| 四指外展 | 指2～5的 joint2 限制为 ±0.03491 rad（约2°）；`env.robot.restrict_abduction=false` 可恢复原生范围 |
+| 桌面顶面 | 0.64 m，reset 随机范围±0.01 m；`env.reset.table_reset_z=0.49`，桌体半高0.15 m |
+| reset 臂/手位置噪声系数 | 0.1 / 0.1 |
+| 成功判定 | 连续10步接近目标；成功时一次发放1000 bonus |
+| 物体池 | 12分布×100=1200个 |
+| LSTM / 环境数 / minibatch | 1024 / 24576 / 98304（actor和critic） |
+| SAPG block size | 4096，默认6块 |
+
+手 kp 数值来自 DexTele 的 `third_party/wuji-mjlab/src/wuji_mjlab/assets/robots/wuji_hand/mjcf/right_mjlab.xml`，已直接写入配置，运行不依赖外部 checkout。外展限制仅写入本次生成的URDF及manifest，仓库原始机器人资产保持原样。
+
+本次仅对齐上述指定项目；MLP、臂/手 damping、armature、底座/q0、桌面长宽、目标框、观测定义和扰动配置沿用当前实现。提高桌面同时会提高物体默认生成高度。双臂任务仍使用自己的默认参数。旧单手 LSTM256 checkpoint 与新的 LSTM1024 网络不兼容；需要重新训练或显式恢复旧网络配置。
+
+下面的小规模 smoke/训练命令会覆盖并行数、物体池和 minibatch，适合本机验证；默认24576环境的完整规模尚未在本机验证。
+
+本次对齐后已通过26项CPU测试，以及2环境、40步的GPU smoke：检查实际导入的臂/手stiffness、四指限位、桌高、连续成功计数中断、随机动作、局部reset和超时。LSTM1024的PPO（16环境）和SAPG（24环境、6块）分别完成2个epoch，保存checkpoint并检查张量数值。历史验证记录中的长期随机rollout和双臂结果属于此前配置，不代表新默认配置的长期稳定性或抓取成功率。
+
 ## 运行依赖与资产
 
 使用仓库已有的 Isaac Sim / Isaac Lab Python 环境。在项目根目录启动；本机需先加载 `.envrc`，让 Isaac Sim 找到兼容的 `libxml2.so.2`：
@@ -83,7 +107,7 @@ source .envrc
   agent.params.config.central_value_config.minibatch_size=256
 ```
 
-正式 PPO 的独立配置是 `isaacsimenvs/cfg/train/TianjiWujiPPO.yaml`，默认使用 1024 个环境：
+正式 PPO 的独立配置是 `isaacsimenvs/cfg/train/TianjiWujiPPO.yaml`，单手默认使用 24576 个环境、LSTM 1024、actor/critic minibatch 98304；MLP 保持 `[256,256,128]`：
 
 ```bash
 source .envrc
@@ -92,15 +116,13 @@ source .envrc
   --agent rl_games_cfg_entry_point --headless
 ```
 
-SAPG 使用 `TianjiWujiSAPG.yaml`。下面显式设为 1536 个环境、每块 256 个环境，共六个探索系数块：
+SAPG 使用 `TianjiWujiSAPG.yaml`，单手默认也是 24576 个环境、LSTM 1024、minibatch 98304，每块 4096 个环境，共六个探索系数块：
 
 ```bash
 source .envrc
 .venv_isaacsim/bin/python isaacsimenvs/train.py \
   --task Isaacsimenvs-SimToolReal-TianjiWuji-Direct-v0 \
-  --agent rl_games_sapg_cfg_entry_point --headless \
-  env.scene.num_envs=1536 \
-  agent.params.config.expl_coef_block_size=256
+  --agent rl_games_sapg_cfg_entry_point --headless
 ```
 
 调整 SAPG 并行数时，保持环境数可被 `expl_coef_block_size` 整除，并同时检查 actor、critic minibatch 与 rollout 样本量的整除关系。训练输出写入 Hydra 本次运行目录，其中包含 rl_games checkpoint 和 summaries。`--checkpoint` 只应载入匹配的新机器人和算法配置的权重。

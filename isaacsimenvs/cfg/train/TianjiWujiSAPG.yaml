@@ -35,7 +35,7 @@ params:
         name: None
     rnn:
       name: lstm
-      units: 256
+      units: 1024
       layers: 1
       before_mlp: True
       layer_norm: True
@@ -75,7 +75,7 @@ params:
     entropy_coef: 0.0
     truncate_grads: True
     e_clip: 0.1
-    minibatch_size: 4096
+    minibatch_size: 98304
     mini_epochs: 2
     critic_coef: 4.0
     clip_value: True
@@ -85,7 +85,7 @@ params:
 
     # Asymmetric critic (stateList > obsList)
     central_value_config:
-      minibatch_size: 4096
+      minibatch_size: 98304
       mini_epochs: 2
       learning_rate: 1e-4
       kl_threshold: 0.016
@@ -111,7 +111,7 @@ params:
     expl_reward_type: entropy
     expl_reward_coef_embd_size: 32
     expl_reward_coef_scale: 0.002
-    expl_coef_block_size: 256
+    expl_coef_block_size: 4096
 
     player:
       deterministic: False
