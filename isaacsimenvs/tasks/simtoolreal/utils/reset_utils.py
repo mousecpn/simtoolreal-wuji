@@ -63,8 +63,8 @@ def allocate_state_buffers(env) -> None:
 
     # --- Action target buffers  ---
     action_space = env.cfg.action_space
-    env._cur_targets = torch.zeros(env.num_envs, action_space, device=env.device)
-    env._prev_targets = torch.zeros(env.num_envs, action_space, device=env.device)
+    env._cur_targets = torch.zeros(env.num_envs, env.robot.num_joints, device=env.device)
+    env._prev_targets = torch.zeros(env.num_envs, env.robot.num_joints, device=env.device)
 
     # --- Keypoint offsets in object local frame ---
     corners = torch.tensor(

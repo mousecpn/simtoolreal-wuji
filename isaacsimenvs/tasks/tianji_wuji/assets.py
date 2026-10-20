@@ -19,6 +19,11 @@ ARM_JOINT_NAMES = tuple(f"Joint{i}_R" for i in range(1, 8))
 HAND_JOINT_NAMES = tuple(f"right_finger{i}_joint{j}" for i in range(1, 6) for j in range(1, 5))
 DOF_NAMES = ARM_JOINT_NAMES + HAND_JOINT_NAMES
 DEFAULT_ARM_POSE = (-0.712, -0.963, 0.0, -0.85, -0.356, 0.0, 0.0)
+# Single-arm task reset pose: palm +0.20 m in Z relative to the canonical
+# pose, preserving palm XY and orientation (URDF FK). Keeps the open fingers
+# above the tabletop and the no-DR horizontal tool spawn. Base mount is unchanged.
+RAISED_ARM_POSE = (-0.44459190, -0.56961068, 0.10262414, -1.52556714,
+                   -0.30756475, 0.15929720, 0.42493656)
 PALM_LINK = "right_wuji_palm"
 FINGERTIP_LINKS = tuple(f"right_finger{i}_tip_link" for i in range(1, 6))
 LEFT_ARM_JOINT_NAMES = tuple(f"Joint{i}_L" for i in range(1, 8))

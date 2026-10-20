@@ -31,7 +31,9 @@ def apply_action_pipeline(env, actions: torch.Tensor) -> None:
     actions = actions.clone().to(env.device)
 
     # Canonical policy order -> Lab parser order.
-    actions = actions[:, env._perm_canon_to_lab]
+    se3 = act_cfg.arm_control_mode == "se3"
+    if not se3:
+        actions = actions[:, env._perm_canon_to_lab]
 
     # Action delay.
     if dr.use_action_delay and dr.action_delay_max > 0:
@@ -47,18 +49,23 @@ def apply_action_pipeline(env, actions: torch.Tensor) -> None:
             torch.arange(env.num_envs, device=env.device), delay_idx
         ]
 
-    # Arm: velocity-delta accumulator.
-    arm_action = actions[:, :7]
-    arm_raw = env._prev_targets[:, :7] + act_cfg.dof_speed_scale * dt * arm_action
-    arm_raw = torch.clamp(arm_raw, env._arm_lower, env._arm_upper)
-    arm_smoothed = (
-        act_cfg.arm_moving_average * arm_raw
-        + (1.0 - act_cfg.arm_moving_average) * env._prev_targets[:, :7]
-    )
-    arm_smoothed = torch.clamp(arm_smoothed, env._arm_lower, env._arm_upper)
+    if se3:
+        arm_smoothed = compute_se3_arm_targets(env, actions[:, :6].clamp(-1.0, 1.0))
+        # Hand inputs remain canonical; select in the parser's hand-joint order.
+        hand_action = actions[:, 6:][:, env._perm_canon_to_lab[env._hand_joint_ids] - 7]
+    else:
+        # Legacy joint velocity-delta accumulator.
+        arm_action = actions[:, :7]
+        arm_raw = env._prev_targets[:, :7] + act_cfg.dof_speed_scale * dt * arm_action
+        arm_raw = torch.clamp(arm_raw, env._arm_lower, env._arm_upper)
+        arm_smoothed = (
+            act_cfg.arm_moving_average * arm_raw
+            + (1.0 - act_cfg.arm_moving_average) * env._prev_targets[:, :7]
+        )
+        arm_smoothed = torch.clamp(arm_smoothed, env._arm_lower, env._arm_upper)
+        hand_action = actions[:, 7:]
 
     # Hand: absolute [-1, 1] scale.
-    hand_action = actions[:, 7:]
     hand_raw = env._hand_lower + 0.5 * (hand_action + 1.0) * (
         env._hand_upper - env._hand_lower
     )
@@ -72,6 +79,52 @@ def apply_action_pipeline(env, actions: torch.Tensor) -> None:
     env._cur_targets[:, env._arm_joint_ids] = arm_smoothed
     env._cur_targets[:, env._hand_joint_ids] = hand_smoothed
     env._prev_targets = env._cur_targets.clone()
+
+
+def damped_ik(jacobian: torch.Tensor, pose_delta: torch.Tensor, damping: float) -> torch.Tensor:
+    """Batched DLS inverse: J.T (J J.T + lambda^2 I)^-1 delta_pose."""
+    if damping <= 0:
+        raise ValueError("ik_damping must be positive")
+    jt = jacobian.transpose(-1, -2)
+    identity = torch.eye(6, device=jacobian.device, dtype=jacobian.dtype)
+    return (jt @ torch.linalg.solve(
+        jacobian @ jt + damping**2 * identity, pose_delta.unsqueeze(-1)
+    )).squeeze(-1)
+
+
+def compute_se3_arm_targets(env, actions: torch.Tensor) -> torch.Tensor:
+    """One differential IK step at the observed palm pose, in world axes.
+
+    Actions specify a relative SE(3) target: p_des=p+dp and
+    R_des=Exp(rotvec)R. Re-linearize at each rollout step. The Jacobian is
+    shifted from the palm link origin to the same palm center as observations.
+    """
+    from isaaclab.utils.math import quat_apply
+    from .obs_utils import PALM_CENTER_OFFSET
+
+    cfg = env.cfg.action
+    if cfg.ik_max_joint_delta <= 0:
+        raise ValueError("ik_max_joint_delta must be positive")
+    robot = env.robot
+    # PhysX excludes the root body from a fixed-base articulation Jacobian.
+    body_index = env._palm_body_id - int(robot.is_fixed_base)
+    joint_columns = env._arm_joint_ids
+    if not robot.is_fixed_base:
+        joint_columns = [j + 6 for j in joint_columns]
+    jacobian = robot.root_physx_view.get_jacobians()[:, body_index, :, joint_columns].clone()
+    offset = torch.tensor(PALM_CENTER_OFFSET, device=env.device, dtype=actions.dtype)
+    offset_w = quat_apply(robot.data.body_quat_w[:, env._palm_body_id],
+                          offset.expand(env.num_envs, -1))
+    # v_center = v_origin + omega cross offset.
+    jacobian[:, :3] += torch.cross(
+        jacobian[:, 3:].transpose(1, 2), offset_w.unsqueeze(1).expand(-1, 7, -1), dim=-1
+    ).transpose(1, 2)
+    delta_pose = torch.cat((actions[:, :3] * cfg.se3_position_scale,
+                            actions[:, 3:] * cfg.se3_rotation_scale), dim=-1)
+    delta_q = damped_ik(jacobian, delta_pose, cfg.ik_damping)
+    delta_q = delta_q.clamp(-cfg.ik_max_joint_delta, cfg.ik_max_joint_delta)
+    current = robot.data.joint_pos[:, env._arm_joint_ids]
+    return (current + delta_q).clamp(env._arm_lower, env._arm_upper)
 
 
 def apply_wrench_dr(env) -> None:

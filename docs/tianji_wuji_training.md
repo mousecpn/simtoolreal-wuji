@@ -142,3 +142,47 @@ source .envrc
 ```
 
 当前 25 项 CPU 测试通过。双手已通过两侧臂/手实际运动、120 步随机动作、加宽桌面、两个工具独立位置、局部 reset、第二工具掉落重置、超时和配对目标成功检查；8 个环境的双工具 PPO 完成 2 个 epoch 并保存有限数值 checkpoint。这些运行验证不代表已学会双手抓取。
+
+## Unicorn / fang：单臂 SAPG，关闭 domain randomization
+
+从仓库根目录提交（1 张 RTX A6000、8 CPU、128 GB 内存，7 天上限）：
+
+```bash
+mkdir -p logs
+sbatch scripts/train_tianji_wuji_nodr_fang.sbatch
+```
+
+脚本使用单右臂 + 右 Wuji 手任务，从头运行 SAPG，24,576 个并行环境（每块 4096，共六个探索系数块）、seed 42、100,000 epochs，每 10,000 epochs 保存 checkpoint。仅通过本次 job 的 Hydra 参数关闭观测/动作/物体状态延迟、物体位姿观测噪声、关节速度观测噪声、物体尺寸观测扰动、随机外力/力矩、物体/指尖摩擦随机化，以及相机位姿、深度增强和相机/student 延迟。机器人关节和桌面 reset 扰动归零，物体初始位姿固定为环境局部坐标 `(0, 0, 0.63, 1, 0, 0, 0)`（位置 + wxyz 四元数），避免默认 reset 仍随机采样物体朝向。工具资产池与目标采样保留为任务分布；正常任务默认配置不变。
+
+日志为 `logs/tianji-wuji-sapg-nodr-<JOBID>.log`，Hydra 配置、checkpoint 与 TensorBoard summaries 位于 `outputs/slurm-<JOBID>-tianji-wuji-sapg-nodr/`。可用 `squeue -j <JOBID>` 查看调度状态，用 `tail -f logs/tianji-wuji-sapg-nodr-<JOBID>.log` 查看训练进度。集群使用方式见 [Unicorn 官方指南](https://it.coecis.cornell.edu/researchit/unicorn/)。
+
+## 单手重置时的手部净空修复
+
+单右臂任务默认使用 `RAISED_ARM_POSE`。在底座位置不变时，掌心相对 canonical
+姿态抬高 0.20 m，XY 和朝向基本不变；按 URDF FK 计算，最低指尖从 z≈0.578 m
+升到 z≈0.778 m。旧姿态的部分指尖低于约 0.60 m 的桌面，重置时可能与桌面、
+工具发生初始穿插。该默认值只适用于单手任务；双手配置仍独立。
+
+新训练（包括 `scripts/train_tianji_wuji_nodr_fang.sbatch`）自动使用新姿态。
+旧 Hydra 配置会恢复旧 `env.robot.arm_default_joint_pos`；用旧 checkpoint 录制时，
+给 `isaacsimenvs/play_video.py` 增加 `--safe_tianji_start`，即可在载入配置后覆盖为
+抬高的姿态。此覆盖改变了 reset 分布，不能把旧策略在新姿态的效果当作重新训练的效果。
+它用于清除初始手部穿插，不保证随机探索过程中不会再次把工具碰飞。
+
+重复重置检查（需 GPU，使用无 DR 的已保存配置）：
+
+```bash
+.venv_isaacsim/bin/python isaacsimenvs/tests/test_tianji_wuji_reset_clearance.py \
+  --headless --enable_cameras \
+  --config outputs/exploration-comparison/tianji-wuji/config.yaml \
+  --out outputs/wuji-reset-clearance/raised
+# 加 --legacy_pose 对照旧姿态。
+```
+
+检查固定手部关节目标，在 24 个环境重复 reset 5 次，每次仿真 60 步，输出
+物体最大上升高度/速度和 5 秒视频；不使用训练策略或随机动作。
+
+本次无 DR 固定起始位姿测试：旧姿态在 120 个环境/重置观测窗口中有 10 个出现
+物体上升超过 10 cm，最大上升约 1.03 m、最大向上速度约 5.04 m/s；抬高姿态
+分别为 0 个、0 m、0.019 m/s。视频和原始指标保存在
+`outputs/wuji-reset-clearance/`。这验证重置净空，不验证旧策略在新姿态下的成功率。

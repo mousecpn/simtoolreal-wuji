@@ -3,7 +3,7 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
 
 from ..simtoolreal.simtoolreal_env_cfg import SimToolRealEnvCfg, AssetsCfg
-from .assets import DEFAULT_ARM_POSE
+from .assets import RAISED_ARM_POSE
 
 
 @configclass
@@ -11,7 +11,7 @@ class TianjiWujiRobotCfg:
     dextele_root: str = ""
     root_pos: tuple[float, float, float] = (-0.48634, 0.28420, 1.01)
     root_quat_wxyz: tuple[float, float, float, float] = (1., 0., 0., 0.)
-    arm_default_joint_pos: tuple[float, ...] = DEFAULT_ARM_POSE
+    arm_default_joint_pos: tuple[float, ...] = RAISED_ARM_POSE
     hand_default_joint_pos: tuple[float, ...] = (0.05,) + (0.,) * 19
     arm_stiffness: tuple[float, ...] = (80., 80., 80., 80., 40., 40., 40.)
     arm_damping: tuple[float, ...] = (8., 8., 8., 8., 4., 4., 4.)
@@ -37,7 +37,7 @@ class TianjiWujiEnvCfg(SimToolRealEnvCfg):
 
     def __post_init__(self):
         super().__post_init__()
-        # The hand starts above the table; smaller reset noise avoids moving
+        # Raised reset posture clears the tool spawn; smaller noise avoids moving
         # the long arm through the tabletop at episode initialization.
         self.reset.reset_dof_pos_random_interval_arm = 0.005
         self.reset.reset_dof_pos_random_interval_fingers = 0.05

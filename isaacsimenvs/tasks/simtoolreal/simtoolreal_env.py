@@ -36,6 +36,11 @@ class SimToolRealEnv(DirectRLEnv):
     ) -> None:
         # Override obs/state space from configured field lists before
         # DirectRLEnv / rl_games observes the configclass.
+        if cfg.action.arm_control_mode not in ("joint", "se3"):
+            raise ValueError("arm_control_mode must be joint or se3")
+        expected_actions = 28 if cfg.action.arm_control_mode == "se3" else 29
+        if cfg.action_space != expected_actions:
+            raise ValueError(f"Expected {expected_actions} actions for {cfg.action.arm_control_mode}")
         cfg.observation_space = compute_obs_dim(cfg.obs.obs_list)
         cfg.state_space = compute_obs_dim(cfg.obs.state_list)
 

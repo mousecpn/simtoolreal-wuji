@@ -121,6 +121,29 @@ class AssetTests(unittest.TestCase):
             self.assertTrue(any(set(pair) == {"right_wuji_palm", "right_finger2_link2"}
                                 for pair in manifest["contact_exclusions"]))
 
+    def test_raised_reset_pose_clears_table_and_preserves_palm_orientation(self):
+        # Canonical fingertips intersect the 0.60 m tabletop at the task mount.
+        # The new reset must lift the hand without changing the base or palm XY.
+        with tempfile.TemporaryDirectory() as directory:
+            path = assets.prepare_asset(output_dir=directory)
+            hand = dict(zip(assets.HAND_JOINT_NAMES, (0.05,) + (0.,) * 19))
+            def fk(arm):
+                return assets.forward_kinematics(path, {**hand, **dict(zip(assets.ARM_JOINT_NAMES, arm))})
+            old, new = fk(assets.DEFAULT_ARM_POSE), fk(assets.RAISED_ARM_POSE)
+            palm_old, palm_new = old[assets.PALM_LINK], new[assets.PALM_LINK]
+            self.assertLess(min(old[t][2][3] + 1.01 for t in assets.FINGERTIP_LINKS), 0.60)
+            self.assertGreater(min(new[t][2][3] + 1.01 for t in assets.FINGERTIP_LINKS), 0.77)
+            for row in range(3):
+                for col in range(3):
+                    self.assertAlmostEqual(palm_old[row][col], palm_new[row][col], places=4)
+            for row in (0, 1):
+                self.assertAlmostEqual(palm_old[row][3], palm_new[row][3], places=4)
+            self.assertAlmostEqual(palm_new[2][3] - palm_old[2][3], 0.20, places=4)
+            limits = {j["name"]: j for j in json.loads((path.parent / "manifest.json").read_text())["joints"]}
+            for name, value in zip(assets.ARM_JOINT_NAMES, assets.RAISED_ARM_POSE):
+                self.assertLessEqual(limits[name]["lower"], value)
+                self.assertLessEqual(value, limits[name]["upper"])
+
     def test_independent_source_and_urdf_fk(self):
         """Catch frame/quat conversion mistakes over the whole articulated tree."""
         try:

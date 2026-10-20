@@ -317,6 +317,13 @@ class StudentObsCfg:
 class ActionCfg:
     """Joint-position-target control with moving-average smoothing."""
 
+    # se3: world-frame palm-center displacement + rotation-vector increment.
+    arm_control_mode: str = "joint"
+    se3_position_scale: float = 0.01  # metres per policy step at action=1
+    se3_rotation_scale: float = 0.05  # radians per policy step at action=1
+    ik_damping: float = 0.05
+    ik_max_joint_delta: float = 0.1  # radians per policy step
+
     arm_moving_average: float = 0.1
     hand_moving_average: float = 0.1
     dof_speed_scale: float = 1.5
