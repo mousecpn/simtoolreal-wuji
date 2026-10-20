@@ -184,6 +184,7 @@ def setup_scene(env) -> None:
     robot_urdf = prepare_asset(
         dextele_root=getattr(env.cfg.robot, "dextele_root", None),
         output_dir=Path(env._tmp_asset_dir) / "robot",
+        restrict_abduction=env.cfg.robot.restrict_abduction,
     )
     env._robot_urdf_path = str(robot_urdf)
     # Preserve palm and contact tip fixed links for observation/contact identity.

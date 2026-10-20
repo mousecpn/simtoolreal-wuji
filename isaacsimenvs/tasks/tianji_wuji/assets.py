@@ -89,7 +89,7 @@ def find_source(dextele_root=None):
     return source
 
 
-def prepare_asset(dextele_root=None, output_dir=None, arms="single"):
+def prepare_asset(dextele_root=None, output_dir=None, arms="single", restrict_abduction=False):
     """Generate a right arm/hand (default) or both arms/hands, returning its path.
 
     Joint frames, mesh scales, principal inertia frames, efforts, and limits are
@@ -97,6 +97,8 @@ def prepare_asset(dextele_root=None, output_dir=None, arms="single"):
     URDF because the MJCF leaves its inertia to mesh-density inference.  The
     source collision-enabled mesh set is retained. Pairwise MJCF exclusions are
     recorded in the manifest for the Isaac Sim scene's USD collision filters.
+    ``restrict_abduction`` optionally applies DexTele's +/-2 degree limits to
+    fingers 2-5 on the generated URDF, leaving source assets untouched.
     """
     if arms not in {"single", "dual"}:
         raise ValueError(f"arms must be 'single' or 'dual', got {arms!r}")
@@ -164,6 +166,12 @@ def prepare_asset(dextele_root=None, output_dir=None, arms="single"):
                     raise ValueError("Nonzero MJCF joint origins require an intermediate URDF frame")
                 ET.SubElement(output, "axis", xyz=joint.get("axis", "0 0 1"))
                 low, high = _numbers(joint.get("range"), ())
+                if restrict_abduction and joint.get("name") in {
+                    f"{side}_finger{finger}_joint2"
+                    for side in (("left", "right") if dual else ("right",))
+                    for finger in range(2, 6)
+                }:
+                    low, high = -0.03491, 0.03491
                 force = _numbers(joint.get("actuatorfrcrange"), (-1., 1.))
                 velocity = 3.14 if joint.get("name") in ARM_JOINT_NAMES + LEFT_ARM_JOINT_NAMES else 8.58
                 ET.SubElement(output, "limit", lower=str(low), upper=str(high), effort=str(max(abs(v) for v in force)), velocity=str(velocity))
@@ -262,6 +270,7 @@ def prepare_asset(dextele_root=None, output_dir=None, arms="single"):
             "license": "Source asset licensing remains with its original providers; this conversion does not relicense the source models or meshes.",
         },
         "joints": joints, "base_link": "base", "palm_link": PALM_LINK,
+        "restrict_abduction": bool(restrict_abduction),
         "fingertip_links": FINGERTIP_LINKS, "default_arm_pose": DEFAULT_ARM_POSE,
         "self_collisions": "Configured by env.robot.self_collision; scene applies contact_exclusions and adjacent-link filters.",
         "contact_exclusions": exclusions,
