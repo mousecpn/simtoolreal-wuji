@@ -6,6 +6,11 @@ from rl_games.algos_torch import models
 NETWORK_REGISTRY = {}
 MODEL_REGISTRY = {}
 
+def _build_c4_network(**kwargs):
+    # Keep escnn optional for the legacy actor_critic networks.
+    from simtoolreal_shared.c4_rl import C4Builder
+    return C4Builder()
+
 def register_network(name, target_class):
     NETWORK_REGISTRY[name] = lambda **kwargs: target_class()
 
@@ -18,6 +23,7 @@ class NetworkBuilder:
         self.network_factory = object_factory.ObjectFactory()
         self.network_factory.set_builders(NETWORK_REGISTRY)
         self.network_factory.register_builder('actor_critic', lambda **kwargs: network_builder.A2CBuilder())
+        self.network_factory.register_builder('c4_actor_critic', _build_c4_network)
         self.network_factory.register_builder('resnet_actor_critic',
                                               lambda **kwargs: network_builder.A2CResnetBuilder())
         self.network_factory.register_builder('rnd_curiosity', lambda **kwargs: network_builder.RNDCuriosityBuilder())

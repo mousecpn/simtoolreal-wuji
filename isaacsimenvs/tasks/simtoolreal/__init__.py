@@ -60,3 +60,15 @@ gym.register(
         "rl_games_sapg_cfg_entry_point": str(_CFG_DIR / "train" / "SimToolRealSAPG.yaml"),
     },
 )
+
+gym.register(
+    id="Isaacsimenvs-SimToolReal-C4-SE3-Direct-v0",
+    entry_point="isaacsimenvs.tasks.simtoolreal.simtoolreal_env:SimToolRealEnv",
+    order_enforce=False,
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": "isaacsimenvs.tasks.simtoolreal.simtoolreal_env_cfg:SimToolRealEnvCfg",
+        "env_cfg_yaml_entry_point": str(_CFG_DIR / "task" / "SimToolRealC4.yaml"),
+        "rl_games_cfg_entry_point": str(_CFG_DIR / "train" / "SimToolRealC4PPO.yaml"),
+    },
+)

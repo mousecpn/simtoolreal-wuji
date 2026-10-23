@@ -51,6 +51,10 @@ OBS_FIELD_SIZES: dict[str, int] = {
     "progress": 1,
     "successes": 1,
     "reward": 1,
+    "object_pos": 3,
+    "goal_pos": 3,
+    "goal_rot": 4,
+    "bbox_coords": 24,
 }
 
 
@@ -287,6 +291,7 @@ def build_observations(env) -> dict[str, torch.Tensor]:
         noisy_goal_rot = quat_mul(yaw_q, goal_rot)
         noisy_goal_kp = _keypoints_world(goal_pos, noisy_goal_rot, kp_offsets)
     else:
+        noisy_goal_rot = goal_rot
         noisy_goal_kp = goal_kp
 
     keypoints_rel_palm_clean = obj_kp - palm_pos.unsqueeze(1)
@@ -324,11 +329,28 @@ def build_observations(env) -> dict[str, torch.Tensor]:
         "progress": torch.log(env.episode_length_buf.float() / 10.0 + 1.0).unsqueeze(-1),
         "successes": torch.log(env._successes.float() + 1.0).unsqueeze(-1),
         "reward": (env.reward_buf * 0.01).unsqueeze(-1),
+        "object_pos": obj_pos,
+        "goal_pos": goal_pos,
+        "goal_rot": convert_quat(goal_rot, to="xyzw"),
     }
 
     obs_noisy = dict(obs_clean)
     obs_noisy["object_rot"] = noisy_obj_rot_xyzw
     obs_noisy["object_vel"] = noisy_obj_vel
+    obs_noisy["object_pos"] = noisy_obj_pos
+    obs_noisy["goal_rot"] = convert_quat(noisy_goal_rot, to="xyzw")
+    if "bbox_coords" in env.cfg.obs.obs_list or "bbox_coords" in env.cfg.obs.state_list:
+        # Eight labeled corners of the oriented grasp box, in environment axes.
+        # Dimensions are object-local; do not treat them as world-frame vectors.
+        box_signs = torch.tensor(
+            [(x, y, z) for x in (-1, 1) for y in (-1, 1) for z in (-1, 1)],
+            device=env.device, dtype=obj_pos.dtype,
+        )
+        box_offsets = box_signs.unsqueeze(0) * (
+            object_scales_obs * env.cfg.reward.object_base_size * 0.5
+        ).unsqueeze(1)
+        obs_clean["bbox_coords"] = _keypoints_world(obj_pos, obj_rot, box_offsets)
+        obs_noisy["bbox_coords"] = _keypoints_world(noisy_obj_pos, noisy_obj_rot, box_offsets)
     obs_noisy["keypoints_rel_palm"] = keypoints_rel_palm_noisy
     obs_noisy["keypoints_rel_goal"] = keypoints_rel_goal_noisy
     if dr.joint_velocity_obs_noise_std > 0:
