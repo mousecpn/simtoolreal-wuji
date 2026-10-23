@@ -29,6 +29,7 @@ def main():
 
         import isaacsimenvs  # noqa: F401
         from isaacsimenvs.tasks.simtoolreal.simtoolreal_env_cfg import SimToolRealEnvCfg
+        from scripts.verify_c4_critic import check_critic
         from scripts.verify_c4_equivariance import check_policy
 
         task = "Isaacsimenvs-SimToolReal-C4-SE3-Direct-v0"
@@ -61,6 +62,29 @@ def main():
         ).to(inner.device)
         state = model.get_default_rnn_state()
         optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+        central_config = agent["params"]["config"]["central_value_config"]
+        assert central_config["network"]["obs_fields"] == list(cfg.obs.state_list)
+        central_model = (
+            ModelBuilder()
+            .load(central_config)
+            .build(
+                {
+                    "actions_num": 28,
+                    "input_shape": (obs["critic"].shape[-1],),
+                    "num_seqs": args.num_envs,
+                    "value_size": 1,
+                    "normalize_input": False,
+                    "normalize_value": True,
+                }
+            )
+            .to(inner.device)
+        )
+        central_optimizer = torch.optim.Adam(central_model.parameters(), lr=1e-4)
+        assert not (
+            {id(p) for p in model.parameters()}
+            & {id(p) for p in central_model.parameters()}
+        )
+        central_error = check_critic(central_model.a2c_network, obs["critic"])
         max_error = check_policy(model.a2c_network, obs["policy"])
         assert obs["policy"].shape == (args.num_envs, 174)
         assert obs["critic"].shape == (args.num_envs, 196)
@@ -114,6 +138,22 @@ def main():
                 grads = [p.grad for p in model.parameters() if p.requires_grad]
                 assert all(g is not None and torch.isfinite(g).all() for g in grads)
                 optimizer.step()
+                central_model.train()
+                before_critic = [p.detach().clone() for p in central_model.parameters()]
+                prediction = central_model({"obs": obs["critic"], "is_train": True})[
+                    "values"
+                ]
+                central_optimizer.zero_grad()
+                (prediction - reward.detach().unsqueeze(-1)).square().mean().backward()
+                assert all(
+                    p.grad is not None and torch.isfinite(p.grad).all()
+                    for p in central_model.parameters()
+                )
+                central_optimizer.step()
+                assert any(
+                    not torch.equal(a, b)
+                    for a, b in zip(before_critic, central_model.parameters())
+                )
                 state = tuple(s.detach() for s in state)
                 selected = torch.tensor([0], device=inner.device)
                 untouched = inner.robot.data.joint_pos[1:].clone()
@@ -126,10 +166,18 @@ def main():
         assert arm_motion > 1e-7, "IK commands did not move the arm"
         model.eval()
         max_error = max(max_error, check_policy(model.a2c_network, obs["policy"]))
+        central_model.eval()
+        central_error = max(
+            central_error, check_critic(central_model.a2c_network, obs["critic"])
+        )
         print(
             f"[C4 SE3 smoke] PASS: {args.num_envs} envs, {args.steps} policy steps, "
             f"174/196 obs, 28 actions, live IK/limits, subset reset, backward+optimizer, "
             f"arm_motion={arm_motion:.3g}, equivariance_max_error={max_error:.3g}",
+            flush=True,
+        )
+        print(
+            f"[C4 central critic smoke] PASS: independent privileged critic backward+optimizer, invariance_max_error={central_error:.3g}",
             flush=True,
         )
     except BaseException:

@@ -5,7 +5,13 @@ from __future__ import annotations
 import torch
 from torch import nn
 
-from .c4 import C4ActorCritic, mixed_type, quaternion_columns
+from .c4 import (
+    C4ActorCritic,
+    EquivariantLinear,
+    mixed_type,
+    quaternion_columns,
+    regular_type,
+)
 
 # (raw width, representation). Quaternions in legacy policy observations: xyzw.
 FIELDS = {
@@ -141,9 +147,59 @@ class C4Network(nn.Module):
         )
 
 
+class C4CentralValueNetwork(nn.Module):
+    """Independent privileged-state MLP; scalar output is C4 invariant.
+
+    Same scalar MLP widths/ELU/order as the baseline central value network.
+    The first escnn layer maps mixed irreps directly into regular features.
+    No recurrent state or parameters are shared with the actor network.
+    """
+
+    def __init__(self, params, **kwargs):
+        super().__init__()
+        if kwargs.get("normalize_input", False):
+            raise ValueError("C4 central critic requires normalize_input=false")
+        if kwargs.get("value_size", 1) != 1:
+            raise ValueError("C4 central critic requires one value")
+        self.encoder = ObservationEncoder(params["obs_fields"])
+        if tuple(kwargs["input_shape"]) != (self.encoder.raw_size,):
+            raise ValueError(
+                "central critic obs_fields must match environment state_list"
+            )
+        field_type = self.encoder.out_type
+        modules = []
+        for width in params["mlp_units"]:
+            if width < 4 or width % 4:
+                raise ValueError(
+                    "regular MLP scalar widths must be positive multiples of 4"
+                )
+            out_type = regular_type(width // 4)
+            modules.extend((EquivariantLinear(field_type, out_type), nn.ELU()))
+            field_type = out_type
+        self.mlp = nn.Sequential(*modules)
+        self.value = EquivariantLinear(field_type, mixed_type(1, 0))
+
+    def is_rnn(self):
+        return False
+
+    def is_separate_critic(self):
+        return False
+
+    def get_default_rnn_state(self):
+        return None
+
+    def get_value_layer(self):
+        return self.value
+
+    def forward(self, obs_dict):
+        return self.value(self.mlp(self.encoder(obs_dict["obs"]))), None
+
+
 class C4Builder:
     def load(self, params):
         self.params = params
 
     def build(self, name, **kwargs):
+        if self.params.get("central_value", False):
+            return C4CentralValueNetwork(self.params, **kwargs)
         return C4Network(self.params, **kwargs)

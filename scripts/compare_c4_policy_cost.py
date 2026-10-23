@@ -21,7 +21,7 @@ from torch import nn
 from torch.utils.flop_counter import FlopCounterMode
 
 from simtoolreal_shared.c4 import EquivariantLinear
-from simtoolreal_shared.c4_rl import FIELDS, C4Network
+from simtoolreal_shared.c4_rl import FIELDS, C4CentralValueNetwork, C4Network
 
 
 class DenseControl(nn.Module):
@@ -145,6 +145,9 @@ def main():
     params = config["params"]["network"]
     raw_width = sum(FIELDS[f][0] for f in params["obs_fields"])
     c4 = C4Network(params, actions_num=28, input_shape=(raw_width,))
+    central_params = config["params"]["config"]["central_value_config"]["network"]
+    c4_state_width = sum(FIELDS[f][0] for f in central_params["obs_fields"])
+    c4_central = C4CentralValueNetwork(central_params, input_shape=(c4_state_width,))
     dense = DenseControl(c4.encoder, params)
     original_cfg = yaml.safe_load(
         (ROOT / "isaacsimenvs/cfg/train/SimToolRealPPO.yaml").read_text()
@@ -184,6 +187,8 @@ def main():
             "encoded_input": c4.encoder.out_type.size,
             "original_input": original_width,
             "original_central_input": state_width,
+            "c4_central_raw_input": c4_state_width,
+            "c4_central_encoded_input": c4_central.encoder.out_type.size,
             "c4_scalar_hidden": 4 * params["hidden_channels"],
         },
         "c4_escnn": measure(c4, lambda: c4({"obs": obs})),
@@ -194,7 +199,19 @@ def main():
         "original_extra_central_critic": measure(
             central, lambda: run_original(central, state_width)
         ),
+        "c4_extra_central_critic": measure(
+            c4_central, lambda: run_original(c4_central, c4_state_width)
+        ),
     }
+    report["system_totals"] = {}
+    for name, actor, critic in (
+        ("c4", "c4_escnn", "c4_extra_central_critic"),
+        ("original", "original_policy", "original_extra_central_critic"),
+    ):
+        report["system_totals"][name] = {
+            key: report[actor][key] + report[critic][key]
+            for key in ("trainable_parameters", "matrix_flops_per_step")
+        }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))

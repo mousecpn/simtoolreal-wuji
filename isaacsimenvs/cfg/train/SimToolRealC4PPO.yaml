@@ -72,6 +72,44 @@ params:
     bounds_loss_coef: 0.0001
     expl_type: none
     use_others_experience: none
+    central_value_config:
+      minibatch_size: 4096
+      mini_epochs: 2
+      learning_rate: 1e-4
+      kl_threshold: 0.016
+      clip_value: true
+      normalize_input: false
+      truncate_grads: true
+      model:
+        name: central_value
+      network:
+        name: c4_actor_critic
+        central_value: true
+        mlp_units: [1024, 1024, 512, 512]
+        # Must exactly match SimToolRealC4.yaml obs.state_list order.
+        obs_fields:
+        - joint_pos
+        - joint_vel
+        - prev_action_targets
+        - palm_pos
+        - palm_rot
+        - palm_vel
+        - object_rot
+        - object_vel
+        - fingertip_pos_rel_palm
+        - keypoints_rel_palm
+        - keypoints_rel_goal
+        - object_scales
+        - closest_keypoint_max_dist
+        - closest_fingertip_dist
+        - lifted_object
+        - progress
+        - successes
+        - reward
+        - object_pos
+        - goal_pos
+        - goal_rot
+        - bbox_coords
     player:
       deterministic: false
       games_num: 100000

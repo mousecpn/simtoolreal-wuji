@@ -61,8 +61,18 @@ actor 同样使用 `escnn.nn.Linear`，从 regular field 映射到
 整个对角 Gaussian 分布的等变性。逐坐标动作 clamp 与 C4 的符号置换也可交换。
 
 训练配置关闭 `normalize_input`，因为普通逐坐标 running mean/std 会破坏等变性；
-builder 会拒绝开启此选项。value normalization 可以使用。新配置采用 PPO 和共享的
-invariant critic；原有 SAPG/asymmetric critic 配置没有套用到这条网络。
+builder 会拒绝开启此选项。value normalization 可以使用。新配置采用 PPO，
+通过 `central_value_config` 接入独立的 asymmetric critic，用于 PPO value/advantage。
+主网络保留与原始 policy 相同的共享 value 输出头，但训练时使用独立 central critic。
+原有 SAPG 配置没有套用到这条网络。
+
+`C4CentralValueNetwork` 使用 clean privileged `state_list`（196D），同样编码为
+混合 irrep（100 invariant 标量 + 34 个 XYZ，合计 202D）。第一层 escnn Linear
+直接从混合表示映射到 1024D regular；随后每层都是 escnn Linear + ELU，
+MLP 标量宽度与原始 central critic 一致，为 `[1024,1024,512,512]`，最后用
+escnn Linear 输出一个 trivial irrep。没有额外的输入投影、LSTM 或 LayerNorm，
+与 actor 不共享参数。critic 的字段顺序必须与 `obs.state_list` 完全一致，
+`normalize_input` 同样关闭，value normalization 可用。
 
 保证范围是网络的输入/状态/输出群作用。固定机器人基座、关节限制、IK 和场景
 不一定构成 C4 对称的物理系统，因此不声称旋转后的物理轨迹完全相同。对非零
@@ -90,6 +100,7 @@ uv pip install --python .venv_isaacsim/bin/python 'escnn==1.0.11'
 ```bash
 .venv_isaacsim/bin/python scripts/verify_c4_equivariance.py
 .venv_isaacsim/bin/python scripts/verify_c4_equivariance.py --device cuda --full-size
+.venv_isaacsim/bin/python scripts/verify_c4_critic.py --device cuda
 .venv_isaacsim/bin/python isaacsimenvs/tests/test_c4_se3_env_smoke.py --headless
 ```
 
@@ -102,7 +113,9 @@ uv pip install --python .venv_isaacsim/bin/python 'escnn==1.0.11'
   agent.params.config.max_epochs=1 \
   agent.params.config.horizon_length=4 agent.params.config.seq_length=4 \
   agent.params.config.minibatch_size=8 agent.params.config.mini_epochs=1 \
-  hydra.run.dir=outputs/c4_escnn_baseline_ppo_smoke
+  agent.params.config.central_value_config.minibatch_size=8 \
+  agent.params.config.central_value_config.mini_epochs=1 \
+  hydra.run.dir=outputs/c4_asymmetric_ppo_smoke
 ```
 
 正式训练可增大环境数、minibatch 和 epoch 数，保持 minibatch 与序列长度、采样总量
@@ -144,12 +157,17 @@ checkpoint SHA256 和视频来源。
 | 对照非等变：相同输入、1024D LSTM、投影/归一化/MLP/输出结构 | 7,875,965 | 15,724,832 |
 | 原始非等变：140D 输入、1024D LSTM、四层 MLP | 7,679,545 | 15,332,352 |
 | 原始模型额外的 asymmetric central critic | 2,004,481 | 4,002,816 |
+| 当前 C4 独立 asymmetric central critic | 511,361 | 4,084,736 |
+| 原始主网络 + central critic 合计 | 9,684,026 | 19,335,168 |
+| 当前 C4 主网络 + central critic 合计 | 2,480,389 | 19,809,568 |
 
 口径：batch=1、sequence=1、FP32、eval forward，包含动作均值和 value 输出；
 一个 MAC 计两个 FLOPs。参数包含 Gaussian log standard deviation；不计缓存矩阵
 和其他 buffer。FLOPs 只计矩阵乘法，不含 bias、逐元素运算、激活、归一化、观测编码、
-采样、反向传播、环境或 IK。前三行不含额外 central critic；原始训练系统若两网都计算，
-合计 9,684,026 参数和 19,335,168 单步矩阵 FLOPs。当前 C4 没有额外 central critic。
+采样、反向传播、环境或 IK。前三行只包含主网络；表中独立 central critic 单列，
+合计表示每种网络各执行一次 forward，不表示完整 PPO 训练的总 FLOPs。
+独立 critic 的矩阵 FLOPs 比原始版本高约 2.05%，原因是编码输入从原始 162D
+变为 202D，其余 MLP 层宽度相同。整个系统合计矩阵 FLOPs 高约 2.45%。
 
 当前 C4 与原始 policy 的 LSTM 隐状态和后续 MLP 标量宽度相同。矩阵 FLOPs
 比原始模型高约 2.56%，因为输入编码为 180D（原始为 140D），且多一个
@@ -170,3 +188,8 @@ CUDA 最大误差分别为 2.13e-14 / 7.63e-6（包括两层 LSTM、MLP、LayerN
 Gaussian、更新参数及 checkpoint 检查）。默认一层生产配置还通过真实环境
 2 env × 16 step smoke test，覆盖 IK/关节限制、局部 reset 和 backward+optimizer；
 最大关节单步运动 0.0182 rad，等变误差 3.81e-6。
+
+独立 critic 已通过 CPU/CUDA float64/float32、四个 C4 元素、优化更新、rl_games
+central value wrapper，以及 train/eval checkpoint 加载检查。完整 PPO 训练入口已
+完成 2 env × 4 step × 1 epoch，actor 和独立 critic 的 checkpoint 张量均为有限值。
+保存位置为 `outputs/c4_asymmetric_ppo_smoke/0_kuka_sharpa_c4_escnn/nn/`。
