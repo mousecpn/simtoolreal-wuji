@@ -28,7 +28,6 @@ exec .venv_isaacsim/bin/python -u isaacsimenvs/train.py \
   --task Isaacsimenvs-SimToolReal-Direct-v0 \
   --agent rl_games_sapg_cfg_entry_point --headless \
   env.scene.num_envs=24576 \
-  env.action_space=29 \
   env.action.arm_control_mode=joint \
   agent.params.config.expl_coef_block_size=4096 \
   agent.params.seed=42 \

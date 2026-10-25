@@ -1,0 +1,123 @@
+# C4 SAPG: invariant learned exploration embeddings and block-conditioned tied XY sigmas.
+params:
+  seed: 42
+  env:
+    clip_observations: 10.0
+    clip_actions: 1.0
+  algo:
+    name: a2c_continuous
+  model:
+    name: continuous_a2c_logstd
+  network:
+    name: c4_actor_critic
+    torch_rollout: false  # opt in after validating export on the target device
+    obs_fields:
+    - joint_pos
+    - joint_vel
+    - prev_action_targets
+    - palm_pos
+    - palm_rot
+    - object_rot
+    - fingertip_pos_rel_palm
+    - keypoints_rel_palm
+    - keypoints_rel_goal
+    - object_scales
+    - object_pos
+    - goal_pos
+    - goal_rot
+    - bbox_coords
+    input_channels: 45  # 180 scalar inputs, no expansion to hidden width before LSTM
+    hidden_channels: 256  # 1024 scalar hidden/cell dimensions
+    layers: 1
+    layer_norm: true
+    mlp_units: [1024, 1024, 512, 512]  # scalar widths; regular field counts / 4
+  load_checkpoint: false
+  load_path: ''
+  config:
+    name: 0_kuka_sharpa_c4_sapg
+    full_experiment_name: ${.name}
+    env_name: rlgpu
+    device: cuda:0
+    device_name: cuda:0
+    multi_gpu: false
+    ppo: true
+    mixed_precision: false
+    normalize_input: false
+    normalize_value: true
+    value_bootstrap: true
+    normalize_advantage: true
+    reward_shaper:
+      scale_value: 0.01
+    num_actors: ${....env.scene.num_envs}
+    gamma: 0.99
+    tau: 0.95
+    learning_rate: 1e-4
+    lr_schedule: adaptive
+    schedule_type: standard
+    kl_threshold: 0.016
+    score_to_win: 1000000
+    max_epochs: 1000000
+    save_best_after: 100
+    save_frequency: 3000
+    print_stats: true
+    grad_norm: 1.0
+    entropy_coef: 0.0
+    truncate_grads: true
+    e_clip: 0.1
+    minibatch_size: 98304
+    mini_epochs: 2
+    critic_coef: 4.0
+    clip_value: true
+    horizon_length: 16
+    seq_length: 16
+    bounds_loss_coef: 0.0001
+    expl_type: mixed_expl_learn_param
+    use_others_experience: lf
+    off_policy_ratio: 1.0
+    expl_reward_type: entropy
+    expl_reward_coef_embd_size: 32
+    expl_reward_coef_scale: 0.002
+    expl_coef_block_size: 4096
+    central_value_config:
+      minibatch_size: 98304
+      mini_epochs: 2
+      learning_rate: 1e-4
+      kl_threshold: 0.016
+      clip_value: true
+      normalize_input: false
+      truncate_grads: true
+      model:
+        name: central_value
+      network:
+        name: c4_actor_critic
+        torch_rollout: false
+        central_value: true
+        mlp_units: [1024, 1024, 512, 512]
+        # Must exactly match SimToolRealC4.yaml obs.state_list order.
+        obs_fields:
+        - joint_pos
+        - joint_vel
+        - prev_action_targets
+        - palm_pos
+        - palm_rot
+        - palm_vel
+        - object_rot
+        - object_vel
+        - fingertip_pos_rel_palm
+        - keypoints_rel_palm
+        - keypoints_rel_goal
+        - object_scales
+        - closest_keypoint_max_dist
+        - closest_fingertip_dist
+        - lifted_object
+        - progress
+        - successes
+        - reward
+        - object_pos
+        - goal_pos
+        - goal_rot
+        - bbox_coords
+    player:
+      deterministic: false
+      games_num: 100000
+      print_stats: false

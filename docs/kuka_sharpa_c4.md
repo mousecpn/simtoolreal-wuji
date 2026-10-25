@@ -64,7 +64,11 @@ actor 同样使用 `escnn.nn.Linear`，从 regular field 映射到
 builder 会拒绝开启此选项。value normalization 可以使用。新配置采用 PPO，
 通过 `central_value_config` 接入独立的 asymmetric critic，用于 PPO value/advantage。
 主网络保留与原始 policy 相同的共享 value 输出头，但训练时使用独立 central critic。
-原有 SAPG 配置没有套用到这条网络。
+SAPG 使用独立的 `SimToolRealC4SAPG.yaml`，通过
+`rl_games_sapg_cfg_entry_point` 选择。每个探索分组的 32D learned embedding
+作为 invariant 标量接入 actor 和独立 critic；两者分别学习自己的 embedding。
+每组分别学习 Gaussian log standard deviation，仍共享平移 XY 和旋转 XY，
+保留 C4 分布等变性。PPO 的参数布局和默认行为保持不变。
 
 `C4CentralValueNetwork` 使用 clean privileged `state_list`（196D），同样编码为
 混合 irrep（100 invariant 标量 + 34 个 XYZ，合计 202D）。第一层 escnn Linear
@@ -101,8 +105,64 @@ uv pip install --python .venv_isaacsim/bin/python 'escnn==1.0.11'
 .venv_isaacsim/bin/python scripts/verify_c4_equivariance.py
 .venv_isaacsim/bin/python scripts/verify_c4_equivariance.py --device cuda --full-size
 .venv_isaacsim/bin/python scripts/verify_c4_critic.py --device cuda
+.venv_isaacsim/bin/python scripts/verify_c4_sapg.py
 .venv_isaacsim/bin/python isaacsimenvs/tests/test_c4_se3_env_smoke.py --headless
 ```
+
+fang 上的 C4 SE3 SAPG、no DR、24,576 env、100,000 epoch：
+
+```bash
+sbatch scripts/train_kuka_sharpa_c4_se3_nodr_fang.sbatch
+```
+
+使用六个 4096-env 探索分组、seed 42、每 10,000 epoch 保存、FP32，
+actor/critic 均关闭输入 normalization，actor/critic minibatch 均为 98,304，
+工具种类和 goal sampling 保留；禁用延迟、噪声、外力、摩擦扰动、
+robot/table 初态扰动和学生视觉增强，固定物体初态。
+`verify_c4_sapg.py` 检查六组条件输入/标准差、等变性、梯度和 checkpoint，
+并以合成环境运行真实 SAPG leader/follower 更新和独立 critic 的一个 epoch；
+`--full-size` 额外使用生产宽度做网络检查。
+
+## Rollout 的普通 Torch 导出
+
+```python
+rollout_network = training_network.export_for_rollout()
+with torch.no_grad():
+    mu, log_std, value, state = rollout_network(obs_dict)
+```
+
+actor 和独立 critic 均支持该接口。导出是当前参数的冻结快照：
+等变 Linear 展开成 `torch.nn.Linear`，C4 LSTM 转为融合的 `torch.nn.LSTM`，
+保留原始 h/c 排列、done reset 和 SAPG 分组标准差。训练网络的模式、
+优化器参数引用和 RNG 状态不变；每次参数更新后需重新导出供下一轮 rollout 使用。
+导出网络只用于推理，继续训练仍加载原来的 escnn checkpoint。
+
+C4 SAPG 训练可用以下 Hydra 参数启用自动导出：
+
+```bash
+agent.params.network.torch_rollout=true \
+agent.params.config.central_value_config.network.torch_rollout=true
+```
+
+开启后，eval + no-grad 的 actor/critic 查询复用同一个 Torch 快照；进入训练、
+加载 checkpoint 或更新权重后自动失效并在下一轮采样重建。更新仍对原来的
+escnn 参数反向传播，快照不加入 optimizer 或训练 checkpoint。默认关闭，
+便于在目标 GPU 上验证正确性和实际延迟后启用；修改源文件不会改变已启动进程。
+
+即使不单独导出，原网络 eval 路径也直接对缓存矩阵调用 Torch `linear`。
+rl_games 会在每次 actor/critic 查询时重复 `eval()`；缓存现在只在 train/eval
+转换、权重更新、设备/精度变化或 checkpoint 加载后重建，避免反复展开 basis。
+
+```bash
+.venv_isaacsim/bin/python scripts/verify_c4_export.py
+.venv_isaacsim/bin/python scripts/verify_c4_export.py --full-size --checkpoint <SAPG.pth>
+.venv_isaacsim/bin/python scripts/verify_c4_sapg.py --torch-rollout
+```
+
+这些检查验证导出前后的动作、标准差、value、非零 h/c、分段序列和 reset，
+以及 C4 变换、快照刷新、RNG 和 checkpoint 兼容性。CPU 正确性检查不代表 GPU
+实际加速比。训练日志中的 Play time 包含采样和 SAPG 经验整理；调参时还应
+分别检查 Update time、minibatch 和精度，避免将所有耗时归因于 rollout。
 
 完整训练入口的小规模检查：
 

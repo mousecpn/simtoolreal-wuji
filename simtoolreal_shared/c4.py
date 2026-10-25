@@ -8,6 +8,8 @@ regular group axis as torch.roll(x, 1, dims=-2).
 
 from __future__ import annotations
 
+import copy
+
 import torch
 from escnn import group, gspaces
 from escnn import nn as enn
@@ -49,11 +51,26 @@ class EquivariantLinear(enn.Linear):
 
     def __init__(self, in_type, out_type, bias=True):
         super().__init__(in_type, out_type, bias=bias)
+        self._eval_weight_versions = None
         self._non_persistent_buffers_set.update(("matrix", "expanded_bias"))
         self.register_load_state_dict_post_hook(self._refresh_eval_cache)
 
     def train(self, mode=True):
+        # rl_games calls eval() on every actor/critic query. escnn otherwise
+        # expands the basis again on every such call, even while already eval.
+        versions = (
+            id(self.weights), self.weights._version,
+            self.weights.device, self.weights.dtype,
+            (id(self.bias), self.bias._version) if self.bias is not None else None,
+        )
+        if (
+            not mode and not self.training
+            and self._eval_weight_versions == versions
+            and hasattr(self, "matrix")
+        ):
+            return self
         result = super().train(mode)
+        self._eval_weight_versions = None if mode else versions
         self._non_persistent_buffers_set.update(("matrix", "expanded_bias"))
         return result
 
@@ -61,12 +78,18 @@ class EquivariantLinear(enn.Linear):
     def _refresh_eval_cache(module, incompatible_keys):
         if not module.training:
             with torch.no_grad():
+                module._eval_weight_versions = None
                 module.train(False)
 
     def forward(self, x):
         if isinstance(x, enn.GeometricTensor):
             return super().forward(x)
         shape = x.shape[:-1]
+        if not self.training:
+            # Cached equivariant weights are ordinary dense Torch matrices.
+            return F.linear(
+                x.reshape(-1, self.in_type.size), self.matrix, self.expanded_bias
+            ).reshape(*shape, self.out_type.size)
         y = super().forward(
             enn.GeometricTensor(x.reshape(-1, self.in_type.size), self.in_type)
         )
@@ -196,6 +219,7 @@ class C4ActorCritic(nn.Module):
         input_channels=None,
         mlp_units=(),
         layer_norm=False,
+        log_std_groups=0,
     ):
         super().__init__()
         self.input_type = mixed_type(invariant_channels, num_vectors)
@@ -222,14 +246,105 @@ class C4ActorCritic(nn.Module):
         self.critic = EquivariantLinear(
             head_type, enn.FieldType(C4_SPACE, [C4.irrep(0)])
         )
-        self.log_std = nn.Parameter(torch.zeros(4 + joint_actions))
+        std_shape = (
+            (log_std_groups, 4 + joint_actions)
+            if log_std_groups else (4 + joint_actions,)
+        )
+        self.log_std = nn.Parameter(torch.zeros(std_shape))
 
-    def forward(self, features, state=None, dones=None):
+    def forward(self, features, state=None, dones=None, coef_indices=None):
         x = unpack_regular(self.input_projection(features), self.input_channels)
         y, state = self.rnn(x, state, dones)
         y = pack_regular(self.mlp(self.layer_norm(y)))
         mean = self.actor(y)
-        idx = [0, 0, 1, 2, 2, 3] + list(range(4, self.log_std.numel()))
-        log_std = self.log_std[idx].expand_as(mean)
+        idx = [0, 0, 1, 2, 2, 3] + list(range(4, self.log_std.shape[-1]))
+        std = self.log_std if coef_indices is None else self.log_std[coef_indices]
+        log_std = std[..., idx].expand_as(mean)
         value = self.critic(y)
         return mean, log_std, value, state
+
+
+class TorchLSTM(nn.Module):
+    """Frozen nn.LSTM snapshot with the C4 LSTM's external state layout."""
+
+    def __init__(self, source: C4LSTM):
+        super().__init__()
+        self.hidden_channels = source.hidden_channels
+        self.num_layers = source.num_layers
+        self.rnn = nn.LSTM(
+            source.inputs[0].linear.in_type.size,
+            4 * self.hidden_channels,
+            self.num_layers,
+            device="meta",
+        )
+        # escnn's field-major output is already (i,f,g,o) x (channel,group),
+        # exactly PyTorch's gate order when hidden features use field-major.
+        # The C4 external state uses (group,channel), converted at the boundary.
+        for layer, (inp, rec) in enumerate(zip(source.inputs, source.recurrents)):
+            for suffix, linear in (("ih", inp.linear), ("hh", rec.linear)):
+                weight, bias = linear.expand_parameters()
+                setattr(self.rnn, f"weight_{suffix}_l{layer}",
+                        nn.Parameter(weight.detach().clone(), requires_grad=False))
+                setattr(self.rnn, f"bias_{suffix}_l{layer}",
+                        nn.Parameter(bias.detach().clone(), requires_grad=False))
+        self.rnn.flatten_parameters()
+
+    def forward(self, x, state=None, dones=None):
+        x = pack_regular(x)
+        if state is not None:
+            state = tuple(pack_regular(s) for s in state)
+        if dones is None:
+            y, state = self.rnn(x, state)
+        else:
+            if state is None:
+                shape = (self.num_layers, x.shape[1], 4 * self.hidden_channels)
+                state = (x.new_zeros(shape), x.new_zeros(shape))
+            outputs = []
+            for t in range(x.shape[0]):
+                keep = (~dones[t].bool()).to(x.dtype).reshape(1, -1, 1)
+                state = tuple(s * keep for s in state)
+                y, state = self.rnn(x[t:t + 1], state)
+                outputs.append(y)
+            y = torch.cat(outputs, 0)
+        return unpack_regular(y, self.hidden_channels), tuple(
+            unpack_regular(s, self.hidden_channels) for s in state
+        )
+
+
+@torch.no_grad()
+def export_for_rollout(module: nn.Module) -> nn.Module:
+    """Snapshot a C4 network as frozen dense Torch layers and fused nn.LSTM.
+
+    Training parameters, optimizer references, mode and RNG state are unchanged.
+    Export again after each update if using a separate rollout snapshot.
+    """
+    memo = {}
+
+    def replace(child):
+        if id(child) in memo:
+            return
+        if isinstance(child, C4LSTM):
+            memo[id(child)] = TorchLSTM(child)
+        elif isinstance(child, EquivariantLinear):
+            weight, bias = child.expand_parameters()
+            linear = nn.Linear(
+                child.in_type.size, child.out_type.size,
+                bias=bias is not None, device="meta",
+            )
+            linear.weight = nn.Parameter(weight.detach().clone(), requires_grad=False)
+            if bias is not None:
+                linear.bias = nn.Parameter(bias.detach().clone(), requires_grad=False)
+            memo[id(child)] = linear
+        else:
+            snapshot = child.__dict__.get("_torch_rollout_snapshot")
+            if snapshot is not None:
+                memo[id(snapshot)] = None
+            for descendant in child.children():
+                replace(descendant)
+
+    replace(module)
+    exported = copy.deepcopy(module, memo)
+    for child in exported.modules():
+        if hasattr(child, "torch_rollout"):
+            child.torch_rollout = False
+    return exported.requires_grad_(False).eval()

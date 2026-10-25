@@ -11,6 +11,7 @@ from .c4 import (
     mixed_type,
     quaternion_columns,
     regular_type,
+    export_for_rollout,
 )
 
 # (raw width, representation). Quaternions in legacy policy observations: xyzw.
@@ -77,7 +78,83 @@ class ObservationEncoder(nn.Module):
         )
 
 
-class C4Network(nn.Module):
+class ExplorationConditioning(nn.Module):
+    """SAPG learned block embeddings are invariant scalars under C4 rotations."""
+
+    def __init__(self, encoder, **kwargs):
+        super().__init__()
+        if kwargs.get("coef_id_idx") != encoder.raw_size:
+            raise ValueError("SAPG coefficient ID must follow the raw observations")
+        if tuple(kwargs["input_shape"]) != (encoder.raw_size + 1,):
+            raise ValueError("SAPG expects raw observations plus one coefficient ID")
+        ids = kwargs["coef_ids"].detach().clone()
+        if ids.ndim != 1 or not len(ids) or len(ids.unique()) != len(ids):
+            raise ValueError("SAPG requires distinct coefficient IDs")
+        self.register_buffer("coef_ids", ids)
+        self.raw_size = encoder.raw_size
+        self.scalar_size = encoder.invariant_channels
+        self.channels = kwargs.get("param_size", 32)
+        self.extra_params = nn.Parameter(torch.randn(len(ids), self.channels))
+
+    def forward(self, obs, encoder):
+        indices = (
+            (obs[..., self.raw_size, None] == self.coef_ids)
+            .to(torch.int64).argmax(-1)
+        )
+        features = encoder(obs[..., :self.raw_size])
+        # The encoder orders invariant scalars before vectors. Keep that order.
+        features = torch.cat(
+            (features[..., :self.scalar_size], self.extra_params[indices],
+             features[..., self.scalar_size:]), -1,
+        )
+        return features, indices
+
+
+class TorchRolloutMixin:
+    """Use a frozen Torch snapshot for no-grad sampling, refreshing after updates."""
+
+    def _init_torch_rollout(self, params):
+        self.torch_rollout = params.get("torch_rollout", False)
+        self.__dict__["_torch_rollout_snapshot"] = None
+        self.__dict__["_torch_rollout_versions"] = None
+        self.register_load_state_dict_post_hook(self._clear_torch_rollout)
+
+    @staticmethod
+    def _clear_torch_rollout(module, incompatible_keys):
+        module.__dict__["_torch_rollout_snapshot"] = None
+        module.__dict__["_torch_rollout_versions"] = None
+
+    def train(self, mode=True):
+        if mode:
+            self._clear_torch_rollout(self, None)
+        elif getattr(self, "torch_rollout", False):
+            versions = tuple(
+                (id(p), p._version, p.device, p.dtype) for p in self.parameters()
+            )
+            if self.__dict__.get("_torch_rollout_versions") != versions:
+                self.__dict__["_torch_rollout_snapshot"] = None
+                self.__dict__["_torch_rollout_versions"] = versions
+        return super().train(mode)
+
+    def export_for_rollout(self):
+        return export_for_rollout(self)
+
+    def _apply(self, fn, recurse=True):
+        self._clear_torch_rollout(self, None)
+        return super()._apply(fn, recurse=recurse)
+
+    def _get_torch_rollout(self):
+        if self.training or not self.torch_rollout or torch.is_grad_enabled():
+            return None
+        snapshot = self.__dict__.get("_torch_rollout_snapshot")
+        if snapshot is None:
+            snapshot = self.export_for_rollout()
+            # Keep snapshots outside registered modules/optimizer/checkpoints.
+            self.__dict__["_torch_rollout_snapshot"] = snapshot
+        return snapshot
+
+
+class C4Network(TorchRolloutMixin, nn.Module):
     def __init__(self, params, **kwargs):
         super().__init__()
         if kwargs.get("normalize_input", False):
@@ -87,13 +164,20 @@ class C4Network(nn.Module):
         if kwargs["actions_num"] != 28 or kwargs.get("value_size", 1) != 1:
             raise ValueError("C4 KUKA/Sharpa requires 28 actions and one value")
         self.encoder = ObservationEncoder(params["obs_fields"])
-        if tuple(kwargs["input_shape"]) != (self.encoder.raw_size,):
+        self.conditioning = (
+            ExplorationConditioning(self.encoder, **kwargs)
+            if kwargs.get("type") == "extra_param" else None
+        )
+        if self.conditioning is None and tuple(kwargs["input_shape"]) != (
+            self.encoder.raw_size,
+        ):
             raise ValueError(
                 "network obs_fields must match the environment obs_list order and width"
             )
         self.num_seqs = kwargs.get("num_seqs", 1)
         self.policy = C4ActorCritic(
-            self.encoder.invariant_channels,
+            self.encoder.invariant_channels
+            + (self.conditioning.channels if self.conditioning else 0),
             self.encoder.num_vectors,
             22,
             params.get("hidden_channels", 64),
@@ -101,7 +185,9 @@ class C4Network(nn.Module):
             input_channels=params.get("input_channels"),
             mlp_units=params.get("mlp_units", ()),
             layer_norm=params.get("layer_norm", False),
+            log_std_groups=len(self.conditioning.coef_ids) if self.conditioning else 0,
         )
+        self._init_torch_rollout(params)
 
     def is_rnn(self):
         return True
@@ -120,11 +206,17 @@ class C4Network(nn.Module):
         return p.new_zeros(shape), p.new_zeros(shape)
 
     def forward(self, obs_dict):
+        snapshot = self._get_torch_rollout()
+        if snapshot is not None:
+            return snapshot(obs_dict)
         obs = obs_dict["obs"]
         length = obs_dict.get("seq_length", 1)
         batch = obs.shape[0] // length
         obs = obs.reshape(batch, length, -1).transpose(0, 1)
-        features = self.encoder(obs)
+        if self.conditioning is None:
+            features, coef_indices = self.encoder(obs), None
+        else:
+            features, coef_indices = self.conditioning(obs, self.encoder)
         states = obs_dict.get("rnn_states")
         rnn = self.policy.rnn
         if states is not None:
@@ -134,7 +226,7 @@ class C4Network(nn.Module):
         dones = obs_dict.get("dones")
         if dones is not None:
             dones = dones.reshape(batch, length).transpose(0, 1)
-        mean, std, value, states = self.policy(features, states, dones)
+        mean, std, value, states = self.policy(features, states, dones, coef_indices)
 
         def flatten(y):
             return y.transpose(0, 1).reshape(batch * length, -1)
@@ -147,7 +239,7 @@ class C4Network(nn.Module):
         )
 
 
-class C4CentralValueNetwork(nn.Module):
+class C4CentralValueNetwork(TorchRolloutMixin, nn.Module):
     """Independent privileged-state MLP; scalar output is C4 invariant.
 
     Same scalar MLP widths/ELU/order as the baseline central value network.
@@ -162,11 +254,23 @@ class C4CentralValueNetwork(nn.Module):
         if kwargs.get("value_size", 1) != 1:
             raise ValueError("C4 central critic requires one value")
         self.encoder = ObservationEncoder(params["obs_fields"])
-        if tuple(kwargs["input_shape"]) != (self.encoder.raw_size,):
+        self.conditioning = (
+            ExplorationConditioning(self.encoder, **kwargs)
+            if kwargs.get("type") == "extra_param" else None
+        )
+        if self.conditioning is None and tuple(kwargs["input_shape"]) != (
+            self.encoder.raw_size,
+        ):
             raise ValueError(
                 "central critic obs_fields must match environment state_list"
             )
-        field_type = self.encoder.out_type
+        field_type = (
+            mixed_type(
+                self.encoder.invariant_channels + self.conditioning.channels,
+                self.encoder.num_vectors,
+            )
+            if self.conditioning else self.encoder.out_type
+        )
         modules = []
         for width in params["mlp_units"]:
             if width < 4 or width % 4:
@@ -178,6 +282,7 @@ class C4CentralValueNetwork(nn.Module):
             field_type = out_type
         self.mlp = nn.Sequential(*modules)
         self.value = EquivariantLinear(field_type, mixed_type(1, 0))
+        self._init_torch_rollout(params)
 
     def is_rnn(self):
         return False
@@ -192,7 +297,15 @@ class C4CentralValueNetwork(nn.Module):
         return self.value
 
     def forward(self, obs_dict):
-        return self.value(self.mlp(self.encoder(obs_dict["obs"]))), None
+        snapshot = self._get_torch_rollout()
+        if snapshot is not None:
+            return snapshot(obs_dict)
+        obs = obs_dict["obs"]
+        features = (
+            self.encoder(obs) if self.conditioning is None
+            else self.conditioning(obs, self.encoder)[0]
+        )
+        return self.value(self.mlp(features)), None
 
 
 class C4Builder:

@@ -70,5 +70,6 @@ gym.register(
         "env_cfg_entry_point": "isaacsimenvs.tasks.simtoolreal.simtoolreal_env_cfg:SimToolRealEnvCfg",
         "env_cfg_yaml_entry_point": str(_CFG_DIR / "task" / "SimToolRealC4.yaml"),
         "rl_games_cfg_entry_point": str(_CFG_DIR / "train" / "SimToolRealC4PPO.yaml"),
+        "rl_games_sapg_cfg_entry_point": str(_CFG_DIR / "train" / "SimToolRealC4SAPG.yaml"),
     },
 )
