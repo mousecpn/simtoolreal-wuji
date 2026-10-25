@@ -253,7 +253,17 @@ class A2CBase(BaseAlgorithm):
         self.mini_epochs_num = self.config['mini_epochs']
 
         self.mixed_precision = self.config.get('mixed_precision', False)
-        self.scaler = torch.cuda.amp.GradScaler(enabled=self.mixed_precision and self.ppo_device != 'cpu')
+        # CUDA autocast defaults to FP16. Keep the dtype explicit so BF16 jobs
+        # do not accidentally use FP16 or an incompatible gradient scaler.
+        mixed_precision_dtype = str(self.config.get('mixed_precision_dtype', 'float16')).lower()
+        if mixed_precision_dtype in ('bfloat16', 'bf16'):
+            self.mixed_precision_dtype = torch.bfloat16
+        elif mixed_precision_dtype in ('float16', 'fp16', 'half'):
+            self.mixed_precision_dtype = torch.float16
+        else:
+            raise ValueError(f"Unsupported mixed_precision_dtype: {mixed_precision_dtype}")
+        self.use_grad_scaler = self.mixed_precision and self.mixed_precision_dtype == torch.float16
+        self.scaler = torch.cuda.amp.GradScaler(enabled=self.use_grad_scaler and self.ppo_device != 'cpu')
 
         self.last_lr = self.config['learning_rate']
         self.frame = 0

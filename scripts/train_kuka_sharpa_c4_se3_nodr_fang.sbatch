@@ -21,7 +21,9 @@ hostname
 nvidia-smi
 
 # C4 equivariant SAPG: six SE3 arm actions and 22 hand joint targets.
-# Keep FP32 and disable input normalization as required by the C4 policy.
+# Use BF16 autocast with FP32 master weights and disable input normalization as
+# required by the C4 policy. The dtype is also overridden on the command line
+# so the submitted job is self-documenting and independent of YAML defaults.
 # Job-local overrides: the task's normal DR defaults are unchanged.
 # Keep the tool asset pool and goal sampling as task diversity. Fix robot,
 # table and object starts; disable all perturbations and sensor augmentation.
@@ -29,6 +31,8 @@ exec .venv_isaacsim/bin/python -u isaacsimenvs/train.py \
   --task Isaacsimenvs-SimToolReal-C4-SE3-Direct-v0 \
   --agent rl_games_sapg_cfg_entry_point --headless \
   env.scene.num_envs=24576 \
+  agent.params.config.mixed_precision=true \
+  agent.params.config.mixed_precision_dtype=bfloat16 \
   agent.params.config.minibatch_size=98304 \
   agent.params.config.central_value_config.minibatch_size=98304 \
   agent.params.config.expl_coef_block_size=4096 \

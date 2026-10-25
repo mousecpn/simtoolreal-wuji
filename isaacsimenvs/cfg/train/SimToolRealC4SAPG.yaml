@@ -41,7 +41,8 @@ params:
     device_name: cuda:0
     multi_gpu: false
     ppo: true
-    mixed_precision: false
+    mixed_precision: true
+    mixed_precision_dtype: bfloat16
     normalize_input: false
     normalize_value: true
     value_bootstrap: true
