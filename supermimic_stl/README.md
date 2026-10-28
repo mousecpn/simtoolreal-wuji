@@ -19,7 +19,7 @@
 
 ```bash
 # RTX 3060 12 GB 小规模配置；训练 10,000 次迭代。
-bash supermimic_stl/run.sh --num-envs 16 --policy-batch 128 --out outputs/supermimic_stl/train_v1
+bash supermimic_stl/run.sh --num-envs 12 --policy-batch 128 --out outputs/supermimic_stl/train_v1
 
 # 改用现有 Tianji/Wuji 单臂任务（重新训练，不是加载 B2m）。
 bash supermimic_stl/run.sh --robot tianji-wuji \
@@ -30,7 +30,7 @@ bash supermimic_stl/run.sh --tool-types hammer \
   --out outputs/supermimic_stl/train_hammer_v1
 ```
 
-默认 12,288 环境、六类工具、每类基础采样数 1（生成器可能为同类生成多个几何变体），world MLP `512×3`、actor `256×2`、critic `256×2`。使用 8 步 autoregressive 模型拟合和 32 步 imagination。完整参数见 `bash supermimic_stl/run.sh --help`；可通过 `SUPER_MIMIC_PYTHON` 指定另一已有兼容环境。
+默认 12,288 环境、六类工具、每类基础采样数 1（生成器可能为同类生成多个几何变体）。world MLP 为 `512×3`；actor/critic 默认 `--policy-arch sapg`，直接复用原版网络构建器（详见下方对齐版本）。`--policy-arch legacy` 保留旧的 `256×2` MLP。使用 8 步 autoregressive 模型拟合和 32 步 imagination。完整参数见 `bash supermimic_stl/run.sh --help`；可通过 `SUPER_MIMIC_PYTHON` 指定另一已有兼容环境。
 
 训练器先采集 128 步随机探索并固定状态归一化统计，预训练模型 100 次，随后每迭代采样 16 步、拟合模型 10 次、更新策略 1 次。world batch 为 128，policy batch 为 12,288；经验池存每环境最近 1,024 步。所有规模参数可调整。
 
@@ -71,10 +71,10 @@ TMPDIR="$PWD/outputs/supermimic_stl/test_tmp" \
 | k-step autoregressive 模型拟合（k=8） | `Learner.fit_world`；跨 reset 的后续样本屏蔽 |
 | 可微模型 + reward / observation / termination heads | residual MLP 预测增强状态、缩放奖励、物理终止和目标切换；状态显式含 clean actor/critic 观测，observation head 为取片段 |
 | 冻结模型、BPTT 计算策略梯度（H=32） | `Learner.improve`；冻结权重但保留输入／动作 Jacobian |
-| 短视野终值 critic + GAE / lambda-return | gamma=.99、lambda=.95；每次 rollout 固定 targets，5 epochs；critic minibatch 随规模受显存上限约束 |
+| 短视野终值 critic + GAE / lambda-return | gamma=.99、lambda=.95；每次 rollout 固定 targets，对齐版 2 epochs × 98,304 逻辑 minibatch；microbatch 只累积梯度 |
 | 可微软终止 survival weight | sigmoid 终止概率累计相乘；时间上限单独截断并 bootstrap pre-reset value |
 | 收集 action noise、imagination 再加 sensor noise | action std=.1，normalized actor obs noise std=.01；两条执行路径一致 |
-| 梯度控制、优化器 | norm clip 1；actor 再逐元素 clip .1；actor Adam beta=(.9,.95)，其余 Adam |
+| 梯度控制、优化器 | legacy 使用 norm clip 1 和 actor 逐元素 clip .1；对齐版 actor/critic 使用原版 Adam beta=(.9,.999)、lr=1e-4、norm clip 1；legacy actor beta=(.9,.95) |
 | 学习率日程 | 250,000 次迭代 cosine 衰减至初始值的 .03，随后固定 |
 
 额外的任务适配：
@@ -87,7 +87,7 @@ TMPDIR="$PWD/outputs/supermimic_stl/test_tmp" \
 
 ## 与论文和完整 SimToolReal 的差异 / 当前边界
 
-- 这是单任务 goal-conditioned feedforward actor，不含论文的动作库、motion encoder/shared decoder、多接口训练、10 帧观测历史、困难动作 reset 采样或分布式 H100 训练；这些并非本工具任务训练循环所必需。
+- 这是单任务 goal-conditioned actor（对齐版带 LSTM），不含论文的动作库、motion encoder/shared decoder、多接口训练、10 帧观测历史、困难动作 reset 采样或分布式 H100 训练；这些并非本工具任务训练循环所必需。
 - v1 使用 **clean/no-delay dynamics**：关闭原任务的动作／观测延迟、物体 pose noise、随机外力/扭矩和摩擦倍率随机化；保留物体和关节初态、桌面高度、工具分布随机化。在真实仿真和想象中加入相同的独立观测噪声。没有宣称完整 sim-to-real robustness。
 - 成功容差固定（默认 .075，原任务起始容差），不会从 replay 混合不同 curriculum 奖励/终止定义。可设置 `--success-tolerance .01` 直接训练更严格版本；后续 checkpoint 不可用不同容差“继续恢复”。
 - 原任务初始目标是 absolute、成功后默认 delta。完整保留此行为；没有把任务改为单目标 episode。默认最多达到 50 个目标。
@@ -135,8 +135,8 @@ SuperMimic uses CPU replay (1,024 time steps), model batch 1,024, 10 model
 updates and 1 policy update per epoch, 128 random-action warmup steps, 100
 model pretraining updates. Only requested policy trajectory counts changed;
 this remains a SuperMimic-inspired task adaptation, not an official reproduction.
-Network sizes/recurrence and exploration differ between algorithms; this is
-an end-to-end method comparison, not a controlled optimizer-only ablation.
+The initial v1 comparison used different network sizes/recurrence. The aligned
+revision below removes those topology differences; learning objectives still differ.
 Replay is omitted from checkpoints by default to avoid repeated ~50+ GB writes;
 `--checkpoint-replay` includes it. Replay-free resumes refill warmup without
 recalibrating the restored model. Periodic actors are retained every 2,000 epochs.
@@ -151,3 +151,53 @@ external task return, goals/episode, any-goal and all-goal success rates.
 Compare training epoch, actual simulator transitions and elapsed wall time;
 SAPG receives twice the real samples at the same epoch. One training seed does
 not establish statistical significance. Training has not finished at submission.
+
+
+## SAPG actor / critic alignment revision
+
+New isolated branch `codex/supermimic-sapg-aligned-20261028`; defaults to
+`--policy-arch sapg`. The original v1 checkout and original task/SAPG sources
+remain unchanged. Aligned training starts from scratch; v1 weights are not
+silently reshaped into the new architecture. The exported actor loader still
+supports v1 actors.
+
+Both networks are built directly from `SimToolRealSAPG.yaml` using the vendored
+rl_games ModelBuilder. `check_alignment.py` compares every parameter/buffer shape
+against a real vanilla SAPG checkpoint, not just a hand-written layer list.
+
+* Actor: native 140-D observations + learned 32-D condition embedding;
+  one-layer LSTM-1024 before MLP, LayerNorm, [1024,1024,512,512] ELU,
+  linear 29-D mean, native six-by-29 conditional log-standard-deviation,
+  Gaussian exploration and hard action clipping to [-1,1]. No output Tanh.
+  Includes the same unused local value head present in vanilla asymmetric SAPG.
+* Critic: ONLY the original 162-D privileged observations + its own learned
+  32-D condition embedding; [1024,1024,512,512] ELU, linear scalar value.
+  It no longer receives augmented world-model state/asset context.
+* Original learned condition embeddings, initializers, running observation/
+  value statistics and clipping rules, Adam betas/epsilon, policy/value initial
+  learning rate 1e-4, and gradient norm clip 1 are retained. No extra elementwise
+  actor gradient clip. Conditions are six equal groups (2,048 envs/group in SM).
+* World-model state normalization remains calibrated once. Actor/critic input
+  statistics update only on real simulator observations and freeze during
+  imagination. Value statistics update on detached lambda targets. Native
+  normalization uses no_grad internally, so we implement identical arithmetic
+  with detached statistics while preserving gradients through inputs/values.
+* Collection and evaluation carry LSTM states across steps and clear them on
+  physical termination/timeout, not goal switches. CPU replay saves collected
+  hidden/cell states every 16 steps (~6 GiB at production scale), then rebuilds
+  a 16-step prefix with current parameters and reset masks before imagination.
+  Stored hidden states are off-policy snapshots; burn-in mitigates their age.
+  Recurrent hidden-state BPTT is truncated every 16 imagined steps; the world
+  model still unrolls 32 steps. Replay capacity must be divisible by 16 and
+  warmup must contain at least 17 steps (production warmup remains 128).
+* Critic: native 98,304 logical minibatch, 2 epochs; microbatch losses use the
+  full logical minibatch weight denominator, accumulate gradients and perform
+  ONE clipped optimizer step per logical minibatch (8 at full rollout count).
+  Actor: 12,288 trajectories, microbatch 512, one accumulated optimizer step.
+
+Counts, object, no-DR settings, 40,000 epochs and evaluation protocol are unchanged.
+World-model fitting, imagination actor gradients, lambda-return data source,
+policy learning-rate cosine schedule (rather than PPO KL adaptation), FP32
+model-based gradients, and absence of SAPG intrinsic exploration bonuses remain
+algorithm differences. Matching topology does not make the two training methods
+identical. The original vanilla SAPG job stays on its original committed code.

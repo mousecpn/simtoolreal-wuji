@@ -33,6 +33,8 @@ def parser():
     p.add_argument('--horizon',type=int,default=32)
     p.add_argument('--window',type=int,default=8)
     p.add_argument('--hidden',type=int,default=512)
+    p.add_argument('--policy-arch',choices=['legacy','sapg'],default='sapg')
+    p.add_argument('--rnn-burnin',type=int,default=16)
     p.add_argument('--policy-hidden',type=int,default=256)
     p.add_argument('--lr',type=float,default=2e-4)
     p.add_argument('--reward-scale',type=float,default=.01)
@@ -65,6 +67,8 @@ def main():
         p.error('Require replay-steps >= warmup-steps >= window')
     if args.model_pretrain<0 or args.reward_scale<=0 or args.lr<=0 or args.success_tolerance<=0:
         p.error('Invalid pretraining, learning rate, reward scale or tolerance')
+    if args.policy_arch=='sapg' and (args.rnn_burnin<1 or args.warmup_steps<args.rnn_burnin+1 or args.replay_steps%16):
+        p.error('SAPG architecture needs positive burnin, warmup >= burnin+1, replay capacity divisible by 16')
     if args.mode!='train' and args.resume is None:
         p.error('eval/validate requires --resume')
     args.out = args.out.resolve()
@@ -81,6 +85,10 @@ def main():
     app = AppLauncher(args).app
     try:
         run(args)
+    except BaseException:
+        import traceback,sys
+        traceback.print_exc(); sys.stdout.flush(); sys.stderr.flush()
+        os._exit(1)
     finally:
         app.close()
 
@@ -99,14 +107,15 @@ def run(args):
     loaded = None
     if args.resume:
         loaded = torch.load(args.resume,map_location='cpu',weights_only=False)
-        if loaded.get('format')!='supermimic-stl-v1':
+        if loaded.get('format') not in ('supermimic-stl-v1','supermimic-stl-v2'):
             raise ValueError('Expected a new SuperMimic-STL checkpoint, not PPO/SAPG weights')
         # Reconstruct the environment and architecture rather than silently
         # accepting evaluation defaults that differ from training.
         saved = loaded['args']
+        args.policy_arch=saved.get('policy_arch','legacy')
         for key in ('robot','seed','assets_per_type','tool_types','success_tolerance','max_goals',
                     'episode_steps','hidden','policy_hidden','horizon','window','lr','reward_scale',
-                    'action_noise','sensor_noise','benchmark_single_object','imagination_microbatch'):
+                    'action_noise','sensor_noise','benchmark_single_object','imagination_microbatch','rnn_burnin'):
             setattr(args,key,saved.get(key,getattr(args,key)))
         if args.mode=='train' and args.num_envs!=saved['num_envs']:
             raise ValueError('Resume requires the original num-envs; evaluation may use fewer')
@@ -120,7 +129,12 @@ def run(args):
             raise AssertionError('State schema mismatch')
         learner = Learner(schema,context.shape[-1],env.cfg.action_space,cfg).to(args.device)
         replay = Replay(args.replay_steps,args.num_envs,state.shape[-1],env.cfg.action_space,
-                        context.shape[-1],args.replay_device,sample_device=args.device)
+                        context.shape[-1],args.replay_device,sample_device=args.device,
+                        rnn_size=cfg.native_spec['actor']['rnn']['units'] if learner.native else 0)
+        if learner.native and args.mode=='train' and args.num_envs%6:
+            raise ValueError('Native SAPG exploration architecture requires six equal environment groups')
+        conditions=(torch.linspace(50.,0.,6,device=args.device)[torch.arange(args.num_envs,device=args.device)*6//args.num_envs,None]
+                    if learner.native else None)
         started = time.monotonic()
         sim_steps = 0
         start_iteration = 0
@@ -144,7 +158,7 @@ def run(args):
                 torch.set_rng_state(loaded['rng']['torch'])
                 torch.cuda.set_rng_state_all(loaded['rng']['cuda'])
         source_dir = Path(__file__).parent
-        metadata_out = dict(metadata,source_hashes={p.name:hashlib.sha256(p.read_bytes()).hexdigest()
+        metadata_out = dict(metadata,network_parameters={name:sum(p.numel() for p in getattr(learner,name).parameters()) for name in ('actor','critic','world')},source_hashes={p.name:hashlib.sha256(p.read_bytes()).hexdigest()
                                                    for p in source_dir.glob('*.py')})
         (args.out/'metadata.json').write_text(json.dumps(metadata_out,indent=2))
         (args.out/'args.json').write_text(json.dumps(vars(args),default=str,indent=2))
@@ -154,14 +168,22 @@ def run(args):
             totals = dict(real_reward=0.,goal_hits=0,completed_episodes=0,terminated=0,timeouts=0,pre_reset_timeouts_verified=0)
             with torch.no_grad():
                 for _ in range(steps):
+                    learner.update_input_stats(state)
+                    hidden=learner.rollout_hidden(state)
+                    policy_action=learner.act(state,noisy=True,condition=conditions) if learner.native else None
                     if random_actions:
                         action = torch.rand(args.num_envs,env.cfg.action_space,device=args.device)*2-1
+                    elif learner.native:
+                        action=policy_action
                     else:
                         action = learner.act(state,noisy=True)
                         action = (action+torch.randn_like(action)*cfg.action_noise).clamp(-1,1)
                     _,reward,term,trunc,_ = env.step(action)
+                    extra=dict(condition=conditions) if learner.native else {}
                     replay.add(state=state,action=action,context=context,next_state=env.mbrl_terminal_state,
-                               reward=reward,terminated=term,truncated=trunc,switch=env.mbrl_success)
+                               reward=reward,terminated=term,truncated=trunc,switch=env.mbrl_success,
+                               rnn_state=hidden,**extra)
+                    learner.reset_done(term|trunc)
                     state = snapshot(env)
                     if trunc.any():
                         timer = slice(*schema['slices']['steps'])
@@ -179,14 +201,14 @@ def run(args):
             return totals
 
         def save(iteration):
-            payload = dict(format='supermimic-stl-v1',iteration=iteration,sim_steps=sim_steps,
+            payload = dict(format='supermimic-stl-v2' if learner.native else 'supermimic-stl-v1',iteration=iteration,sim_steps=sim_steps,
                            args=vars(args),metadata=metadata,learner=learner.checkpoint(),replay=replay.state_dict() if args.checkpoint_replay else None,
                            rng=dict(python=random.getstate(),numpy=np.random.get_state(),
                                     torch=torch.get_rng_state(),cuda=torch.cuda.get_rng_state_all()))
             tmp = args.out/'latest.tmp'
             torch.save(payload,tmp)
             tmp.replace(args.out/'latest.pt')
-            torch.save(dict(format='supermimic-stl-actor-v1',actor=learner.actor.state_dict(),
+            torch.save(dict(format='supermimic-stl-actor-v2' if learner.native else 'supermimic-stl-actor-v1',actor=learner.actor.state_dict(),
                             mean=learner.mean[:schema['obs_dim']].cpu(),
                             scale=learner.scale[:schema['obs_dim']].cpu(),
                             metadata=metadata),args.out/'actor.pt')
@@ -220,15 +242,16 @@ def run(args):
         history = args.out/'metrics.jsonl'
         for iteration in range(start_iteration+1,start_iteration+args.iterations+1):
             cosine = .03+.97*.5*(1+math.cos(math.pi*min(iteration/250000,1.)))
-            for optimizer in learner.optimizers.values():
+            for name,optimizer in learner.optimizers.items():
+                base_lr=cfg.native_spec['learning_rate'] if learner.native and name!='world' else cfg.lr
                 for group in optimizer.param_groups:
-                    group['lr'] = cfg.lr*cosine
+                    group['lr'] = base_lr*cosine
             real = collect(args.collect_steps)
             for _ in range(args.world_updates):
                 last_metrics = learner.fit_world(replay.sample(args.model_batch,args.window))
             for _ in range(args.policy_updates):
-                policy_metrics = learner.improve(replay.sample(args.policy_batch))
-            metrics = dict(iteration=iteration,sim_steps=sim_steps,elapsed_seconds=time.monotonic()-started,
+                policy_metrics = learner.improve(replay.sample_policy(args.policy_batch,cfg.rnn_burnin))
+            metrics = dict(peak_torch_gpu_bytes=torch.cuda.max_memory_allocated() if torch.cuda.is_available() else 0,iteration=iteration,sim_steps=sim_steps,elapsed_seconds=time.monotonic()-started,
                            **real,**last_metrics,**policy_metrics)
             if not all(np.isfinite(v) for v in metrics.values()):
                 raise FloatingPointError('Nonfinite training metrics')

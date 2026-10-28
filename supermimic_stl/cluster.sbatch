@@ -7,26 +7,26 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=256G
 #SBATCH --time=7-00:00:00
-#SBATCH --output=/home/ps2338/simtoolreal/logs/single-hammer-%j.log
+#SBATCH --output=/home/ps2338/simtoolreal/logs/single-hammer-aligned-%j.log
 set -euo pipefail
 algorithm="${1:?supermimic or sapg}"
-repo="${BENCHMARK_REPO:-/home/ps2338/simtoolreal-sm-benchmark}"
+repo="${BENCHMARK_REPO:-/home/ps2338/simtoolreal-sm-aligned}"
 cd "$repo"
 export PYTHONPATH="$repo:$repo/rl_games${PYTHONPATH:+:$PYTHONPATH}"
 export OMNI_KIT_ACCEPT_EULA=YES WANDB_MODE=disabled PYTHONUNBUFFERED=1
 export OMP_NUM_THREADS=8 OPENBLAS_NUM_THREADS=8 PXR_WORK_THREAD_LIMIT=16
 python_bin=/home/ps2338/simtoolreal/.venv_isaacsim/bin/python
-out="/home/ps2338/simtoolreal/outputs/single_hammer_20261028/${algorithm}-${SLURM_JOB_ID}"
+out="/home/ps2338/simtoolreal/outputs/single_hammer_aligned_20261028/${algorithm}-${SLURM_JOB_ID}"
 mkdir -p "$out"
 export TMPDIR="$out/tmp"
 mkdir -p "$TMPDIR"
 git rev-parse HEAD > "$out/git_commit.txt"
 nvidia-smi > "$out/gpu.txt"
-"$python_bin" -m unittest supermimic_stl.test_core -v > "$out/unit-tests.log" 2>&1
+"$python_bin" -m unittest supermimic_stl.test_core supermimic_stl.test_aligned -v > "$out/unit-tests.log" 2>&1
 if [[ "$algorithm" == supermimic ]]; then
   "$python_bin" -m supermimic_stl.train --headless --benchmark-single-object \
     --num-envs 12 --policy-batch 12288 --imagination-microbatch 512 \
-    --replay-device cpu --replay-steps 16 --warmup-steps 8 --model-batch 16 \
+    --replay-device cpu --replay-steps 64 --warmup-steps 32 --model-batch 16 \
     --model-pretrain 2 --world-updates 1 --iterations 2 --sensor-noise 0 \
     --out "$out/smoke"
   test -f "$out/smoke/result.json"

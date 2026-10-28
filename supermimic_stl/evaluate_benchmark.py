@@ -34,6 +34,7 @@ def main():
                 raise ValueError('Evaluation asset differs from trained actor')
             class Policy:
                 def act(self,state): return actor(state[:,:schema['obs_dim']])
+                def reset_done(self,done): actor.reset_done(done)
         else:
             from omegaconf import OmegaConf
             from rl_games.torch_runner import Runner
@@ -66,6 +67,9 @@ def main():
         print(json.dumps(report),flush=True)
         if report['status']!='complete': raise RuntimeError('Evaluation episode quota not met')
         env.close()
+    except BaseException:
+        import traceback,sys
+        traceback.print_exc();sys.stdout.flush();sys.stderr.flush();os._exit(1)
     finally: app.close()
 
 if __name__=='__main__': main()

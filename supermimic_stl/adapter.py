@@ -98,7 +98,12 @@ def configure(args):
     identity = torch.nn.functional.one_hot(index,len(paths)).float()
     mass = env._object_mass.reshape(env.num_envs,-1)
     context = torch.cat([identity,mass,env._object_scale_per_env],-1)
-    core_cfg = Config(imagination_microbatch=getattr(args,"imagination_microbatch",512),horizon=args.horizon,window=args.window,hidden=args.hidden,
+    spec=None
+    if getattr(args,'policy_arch','legacy')=='sapg':
+        from .aligned import native_spec
+        spec=native_spec()
+    core_cfg = Config(policy_arch=getattr(args,'policy_arch','legacy'),native_spec=spec,
+                      rnn_burnin=getattr(args,'rnn_burnin',16),imagination_microbatch=getattr(args,"imagination_microbatch",512),horizon=args.horizon,window=args.window,hidden=args.hidden,
                       policy_hidden=args.policy_hidden,lr=args.lr,reward_scale=args.reward_scale,
                       action_noise=args.action_noise,sensor_noise=args.sensor_noise,
                       episode_steps=args.episode_steps,goal_mode=cfg.reset.goal_sampling_type,
@@ -110,7 +115,7 @@ def configure(args):
                     domain_randomization=('single fixed hammer; no DR; fixed reset' if getattr(args,'benchmark_single_object',False)
                                           else 'clean/no-delay v1; physical reset randomization retained'),
                     success_tolerance=args.success_tolerance,max_goals=args.max_goals,
-                    assets_per_type=args.assets_per_type,tool_types=args.tool_types,
+                    assets_per_type=cfg.assets.num_assets_per_type,tool_types=list(cfg.assets.handle_head_types),
                     seed=args.seed,core_cfg=core_cfg.__dict__)
     return env,schema,context,core_cfg,metadata
 

@@ -15,6 +15,9 @@ from torch.nn import functional as F
 
 @dataclass
 class Config:
+    policy_arch: str = "legacy"
+    native_spec: dict | None = None
+    rnn_burnin: int = 16
     imagination_microbatch: int = 512
     horizon: int = 32
     window: int = 8
@@ -96,15 +99,25 @@ def sample_goal(goal, cfg):
 
 class Replay:
     """Time-major ring, exact pre-reset next states, masked reset boundaries."""
-    def __init__(self, capacity, num_envs, state_dim, action_dim, context_dim, device, sample_device=None):
+    def __init__(self, capacity, num_envs, state_dim, action_dim, context_dim, device, sample_device=None, rnn_size=0, rnn_stride=16):
         self.capacity, self.num_envs, self.device = capacity, num_envs, device
         self.sample_device = sample_device or device
+        self.rnn_stride,self.rnn_size=rnn_stride,rnn_size
+        if rnn_size and capacity%rnn_stride:
+            raise ValueError('Recurrent replay capacity must be divisible by RNN checkpoint stride')
+        self.rnn_data=(torch.empty(capacity//rnn_stride,num_envs,2,rnn_size,device=device)
+                       if rnn_size else None)
         self.total = 0
         dims = dict(state=state_dim, action=action_dim, context=context_dim,
                     next_state=state_dim, reward=1, terminated=1, truncated=1, switch=1)
+        if rnn_size: dims['condition']=1
         self.data = {k: torch.empty(capacity, num_envs, d, device=device) for k,d in dims.items()}
 
-    def add(self, **transition):
+    def add(self, rnn_state=None, **transition):
+        if self.rnn_data is not None and self.total%self.rnn_stride==0:
+            if rnn_state is None: raise ValueError('Recurrent replay needs collection hidden states')
+            self.rnn_data[(self.total//self.rnn_stride)%len(self.rnn_data)].copy_(
+                torch.stack([x[0].detach() for x in rnn_state],dim=1))
         i = self.total % self.capacity
         for key, buf in self.data.items():
             x = transition[key].detach().reshape(self.num_envs, -1)
@@ -122,13 +135,30 @@ class Replay:
         times = (starts[None, :]+torch.arange(window, device=self.device)[:, None]) % self.capacity
         return {k:v[times, envs[None, :]].to(self.sample_device).clone() for k,v in self.data.items()}
 
+    def sample_policy(self,batch,burnin):
+        if self.rnn_data is None: return self.sample(batch)
+        oldest=max(0,self.total-self.capacity)
+        first=(oldest+self.rnn_stride-1)//self.rnn_stride
+        last=(self.total-burnin-1)//self.rnn_stride
+        if first>last: raise ValueError('Need more recurrent replay warmup')
+        starts=torch.randint(first,last+1,(batch,),device=self.device)*self.rnn_stride
+        envs=torch.randint(self.num_envs,(batch,),device=self.device)
+        times=(starts[None,:]+torch.arange(burnin+1,device=self.device)[:,None])%self.capacity
+        data={k:v[times,envs[None,:]].to(self.sample_device).clone() for k,v in self.data.items()}
+        slots=(starts//self.rnn_stride)%len(self.rnn_data)
+        data['rnn_state']=self.rnn_data[slots,envs].transpose(0,1).to(self.sample_device).clone()
+        return data
+
     def state_dict(self):
         # Preserve absolute ring indexing, including partially filled buffers.
         count = min(self.total, self.capacity)
-        return dict(total=self.total, data={k:v[:count].cpu() for k,v in self.data.items()})
+        return dict(total=self.total, data={k:v[:count].cpu() for k,v in self.data.items()},
+                    rnn_data=self.rnn_data[:min(len(self.rnn_data),(self.total+self.rnn_stride-1)//self.rnn_stride)].cpu() if self.rnn_data is not None else None)
 
     def load_state_dict(self, state):
         self.total = state['total']
+        if self.rnn_data is not None and state.get('rnn_data') is not None:
+            self.rnn_data[:len(state['rnn_data'])].copy_(state['rnn_data'])
         for k,v in state['data'].items():
             self.data[k][:len(v)].copy_(v)
 
@@ -167,16 +197,25 @@ class Learner(nn.Module):
         self.schema, self.cfg = schema, cfg
         self.obs_dim, self.state_dim = schema['obs_dim'], schema['state_dim']
         self.world = World(self.state_dim, action_dim, context_dim, cfg)
-        self.actor = mlp(self.obs_dim, action_dim, cfg.policy_hidden, 2)
-        self.critic = mlp(self.state_dim+context_dim, 1, cfg.policy_hidden, 2)
-        nn.init.normal_(self.actor[-1].weight, std=.001)
-        nn.init.zeros_(self.actor[-1].bias)
+        self.native=cfg.policy_arch=='sapg'
+        self._rollout_hidden=None
+        if self.native:
+            from .aligned import NativeNetwork
+            self.critic_end=max(v[1] for k,v in schema['slices'].items() if k.startswith('critic.'))
+            self.actor=NativeNetwork(cfg.native_spec,self.obs_dim,action_dim)
+            self.critic=NativeNetwork(cfg.native_spec,self.critic_end-self.obs_dim,action_dim,critic=True)
+        else:
+            self.actor = mlp(self.obs_dim, action_dim, cfg.policy_hidden, 2)
+            self.critic = mlp(self.state_dim+context_dim, 1, cfg.policy_hidden, 2)
+            nn.init.normal_(self.actor[-1].weight, std=.001)
+            nn.init.zeros_(self.actor[-1].bias)
         self.register_buffer('mean', torch.zeros(self.state_dim))
         self.register_buffer('scale', torch.ones(self.state_dim))
+        policy_lr=cfg.native_spec['learning_rate'] if self.native else cfg.lr
         self.optimizers = {
             'world': torch.optim.Adam(self.world.parameters(), lr=cfg.lr),
-            'actor': torch.optim.Adam(self.actor.parameters(), lr=cfg.lr, betas=(.9,.95)),
-            'critic': torch.optim.Adam(self.critic.parameters(), lr=cfg.lr),
+            'actor': torch.optim.Adam(self.actor.parameters(), lr=policy_lr, betas=(.9,.999) if self.native else (.9,.95)),
+            'critic': torch.optim.Adam(self.critic.parameters(), lr=policy_lr),
         }
 
     def sl(self, name):
@@ -196,13 +235,35 @@ class Learner(nn.Module):
         for name in ('near_goal', 'successes', 'steps'):
             self.scale[self.sl(name)].clamp_(min=1.)
 
-    def act(self, state, noisy=False):
+    def rollout_hidden(self,state):
+        if self.native and (self._rollout_hidden is None or self._rollout_hidden[0].shape[1]!=len(state)):
+            self._rollout_hidden=self.actor.initial_state(len(state))
+        return self._rollout_hidden
+
+    def reset_done(self,done):
+        if self.native and self._rollout_hidden is not None:
+            from .aligned import reset_hidden
+            self._rollout_hidden=reset_hidden(self._rollout_hidden,done)
+
+    def update_input_stats(self,state):
+        if self.native:
+            self.actor.update_inputs(state[:,:self.obs_dim])
+            self.critic.update_inputs(state[:,self.obs_dim:self.critic_end])
+
+    def act(self, state, noisy=False,condition=None):
+        if self.native:
+            action,hidden,_=self.actor.step(state[:,:self.obs_dim],self.rollout_hidden(state),condition,
+                                             stochastic=noisy,noise=self.cfg.sensor_noise if noisy else 0.)
+            self._rollout_hidden=tuple(x.detach() for x in hidden)
+            return action
         obs = self.normalize(state)[:, :self.obs_dim]
         if noisy and self.cfg.sensor_noise:
             obs = obs+torch.randn_like(obs)*self.cfg.sensor_noise
         return self.actor(obs).tanh()
 
-    def value(self, z, context):
+    def value(self, z, context,condition=None,normalized=False):
+        if self.native:
+            return self.critic(self.raw(z)[:,self.obs_dim:self.critic_end],condition,normalized=normalized)
         return self.critic(torch.cat([z, context], -1)).squeeze(-1)
 
     def project(self, predicted, old, switch, next_goal=None):
@@ -301,26 +362,60 @@ class Learner(nn.Module):
                 chunks.append(data)
         grad_norm = nn.utils.clip_grad_norm_(self.actor.parameters(),1.,error_if_nonfinite=True)
         for p in self.actor.parameters():
-            if p.grad is not None:
+            if not self.native and p.grad is not None:
                 p.grad.clamp_(-.1,.1)
         opt.step()
-        zs, cs, targets, ws = [torch.cat([c[i] for c in chunks]) for i in range(4)]
+        zs, cs, targets, ws, conditions = [torch.cat([c[i] for c in chunks]) for i in range(5)]
+        if self.native:
+            self.critic.update_values(targets)
+            targets=self.critic.normalize_targets(targets)
         critic_losses = []
-        # Bound critic activation memory too, preserving fixed lambda targets.
-        size = min(self.cfg.imagination_microbatch*4,
-                   max(1, math.ceil(len(zs)/self.cfg.critic_minibatches)))
-        for _ in range(self.cfg.critic_epochs):
-            for ids in torch.randperm(len(zs),device=zs.device).split(size):
-                loss = ((self.value(zs[ids],cs[ids])-targets[ids]).square()*ws[ids]).sum()/ws[ids].sum().clamp_min(1)
-                self._update('critic',loss,self.critic.parameters())
-                critic_losses.append(float(loss.detach()))
+        critic_updates=0
+        if self.native:
+            # Native SAPG central-value minibatch=98304, mini_epochs=2.
+            # Microbatches accumulate a single weighted MSE gradient per logical
+            # minibatch; do NOT turn them into thousands of optimizer steps.
+            logical=self.cfg.native_spec['critic_minibatch']
+            micro=self.cfg.imagination_microbatch*4
+            for _ in range(self.cfg.native_spec['critic_epochs']):
+                for ids in torch.randperm(len(zs),device=zs.device).split(logical):
+                    opt=self.optimizers['critic']; opt.zero_grad(set_to_none=True)
+                    denominator=ws[ids].sum().clamp_min(1)
+                    total_loss=0.
+                    for part in ids.split(micro):
+                        loss=((self.value(zs[part],cs[part],conditions[part],normalized=True)-targets[part]).square()*ws[part]).sum()/denominator
+                        if not torch.isfinite(loss): raise FloatingPointError('Nonfinite critic loss')
+                        loss.backward(); total_loss+=float(loss.detach())
+                    nn.utils.clip_grad_norm_(self.critic.parameters(),1.,error_if_nonfinite=True)
+                    opt.step(); critic_updates+=1
+                    critic_losses.append(total_loss)
+        else:
+            size = min(self.cfg.imagination_microbatch*4,
+                       max(1, math.ceil(len(zs)/self.cfg.critic_minibatches)))
+            for _ in range(self.cfg.critic_epochs):
+                for ids in torch.randperm(len(zs),device=zs.device).split(size):
+                    loss = ((self.value(zs[ids],cs[ids])-targets[ids]).square()*ws[ids]).sum()/ws[ids].sum().clamp_min(1)
+                    self._update('critic',loss,self.critic.parameters())
+                    critic_losses.append(float(loss.detach())); critic_updates+=1
         return dict(actor_loss=actor_loss,critic_loss=sum(critic_losses)/len(critic_losses),
-                    actor_grad_norm=float(grad_norm),imagined_rollouts=total)
+                    actor_grad_norm=float(grad_norm),imagined_rollouts=total,critic_optimizer_steps=critic_updates)
 
     def _imagine(self, batch):
         cfg = self.cfg
-        context = batch['context'][0]
-        z = self.normalize(batch['state'][0]).detach()
+        hidden=None
+        anchor=cfg.rnn_burnin if self.native else 0
+        condition=batch['condition'][anchor] if self.native else None
+        if self.native:
+            from .aligned import reset_hidden
+            hidden=tuple(x[None].detach() for x in batch['rnn_state'])
+            with torch.no_grad():
+                for t in range(anchor):
+                    _,hidden,_=self.actor.step(batch['state'][t,:,:self.obs_dim],hidden,batch['condition'][t])
+                    done=(batch['terminated'][t,:,0]+batch['truncated'][t,:,0])>0
+                    hidden=reset_hidden(hidden,done)
+            hidden=tuple(x.detach() for x in hidden)
+        context = batch['context'][anchor]
+        z = self.normalize(batch['state'][anchor]).detach()
         # Time limits stop imagination and bootstrap the pre-reset state. They
         # are NOT physical terminals and never suppress its terminal value.
         remaining = (cfg.episode_steps-self.raw(z)[:,self.sl('steps')].squeeze(-1)).round().clamp_min(1)
@@ -333,19 +428,35 @@ class Learner(nn.Module):
                 weight = survival*active
                 states.append(z.detach())
                 weights.append(weight.detach())
-                obs = z[:, :self.obs_dim]
-                obs = obs+torch.randn_like(obs)*cfg.sensor_noise
-                action = self.actor(obs).tanh()
+                if self.native:
+                    action,hidden,mu=self.actor.step(self.raw(z)[:,:self.obs_dim],hidden,condition,
+                                                    stochastic=True,noise=cfg.sensor_noise)
+                    # Same linear mean + hard action clipping as vanilla SAPG.
+                    # Its bounds penalty keeps means from becoming stuck outside the clamp.
+                    penalty=((mu-1.1).clamp_min(0).square()+(-mu-1.1).clamp_min(0).square()).sum(-1)
+                    objective=objective-cfg.native_spec['bounds_loss_coef']*penalty/cfg.horizon
+                    if (t+1)%cfg.native_spec['seq_length']==0:
+                        hidden=tuple(x.detach() for x in hidden)
+                else:
+                    obs=z[:,:self.obs_dim]+torch.randn_like(z[:,:self.obs_dim])*cfg.sensor_noise
+                    action = self.actor(obs).tanh()
                 next_z, r, term, _ = self.step_model(z, action, context)
                 d = cfg.gamma*(1-term.sigmoid())
                 objective = objective+(cfg.gamma**t)*weight*r
                 time_end = (remaining == t+1).to(z.dtype)
                 horizon_end = (t == cfg.horizon-1)
                 bootstrap = torch.ones_like(time_end) if horizon_end else time_end
-                objective = objective+(cfg.gamma**t)*weight*d*bootstrap*self.value(next_z, context)
+                if horizon_end or bool(time_end.any()):
+                    next_value=self.value(next_z,context,condition)
+                    objective = objective+(cfg.gamma**t)*weight*d*bootstrap*next_value
+                else:
+                    # Lambda targets need values at every step, but the actor
+                    # only bootstraps at horizon/time boundaries. Do not retain
+                    # zero-weight critic graphs at every intermediate step.
+                    with torch.no_grad(): next_value=self.value(next_z,context,condition)
                 rewards.append(r.detach())
                 discounts.append(d.detach())
-                next_values.append(self.value(next_z, context).detach())
+                next_values.append(next_value.detach())
                 time_limits.append(time_end)
                 survival = survival*(1-term.sigmoid())
                 z = next_z
@@ -357,7 +468,9 @@ class Learner(nn.Module):
         cs = context.unsqueeze(0).expand(cfg.horizon,-1,-1).flatten(0,1)
         targets = targets.flatten()
         ws = torch.stack(weights).flatten()
-        return actor_loss, (zs.detach(),cs.detach(),targets,ws)
+        conditions=(condition if condition is not None else z.new_zeros(len(z),1))
+        conditions=conditions[None].expand(cfg.horizon,-1,-1).flatten(0,1)
+        return actor_loss, (zs.detach(),cs.detach(),targets,ws,conditions)
 
     def checkpoint(self):
         return dict(model=self.state_dict(),optimizers={k:v.state_dict() for k,v in self.optimizers.items()},
