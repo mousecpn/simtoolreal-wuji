@@ -62,6 +62,8 @@ def _build_parser() -> argparse.ArgumentParser:
                         default=True,
                         help="Always use the default table URDF regardless of category.")
     parser.add_argument("--rl_device", default="cuda")
+    parser.add_argument("--task", default=None,
+                        help="Gym task id; loads its registered task YAML before evaluation overrides.")
     return parser
 
 
@@ -122,6 +124,13 @@ def main() -> None:
 
     # --- Env config (mirrors dextoolbench/eval_isaacgym.py overrides) ---
     cfg = SimToolRealEnvCfg()
+    if args.task is not None:
+        import yaml
+
+        yaml_path = gym.spec(args.task).kwargs.get("env_cfg_yaml_entry_point")
+        if yaml_path:
+            with open(yaml_path) as f:
+                cfg.from_dict(yaml.safe_load(f) or {})
     cfg.scene.num_envs = 1
 
     cfg.assets.object_urdf = str(obj.decomposed_urdf_path)
@@ -159,7 +168,7 @@ def main() -> None:
     term.success_steps = 1
     term.max_consecutive_successes = n_goals
 
-    env = gym.make("Isaacsimenvs-SimToolReal-Direct-v0", cfg=cfg)
+    env = gym.make(args.task or "Isaacsimenvs-SimToolReal-Direct-v0", cfg=cfg)
     inner = env.unwrapped
     inner._replay_target_lab_order = None
 
